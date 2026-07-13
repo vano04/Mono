@@ -30,6 +30,8 @@ def test_existing_native_database_is_upgraded_to_current_schema(monkeypatch, tmp
 
     with sqlite3.connect(database) as connection:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(projects)")}
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
     assert {"progress_metric_key", "progress_metric_direction"}.issubset(columns)
-    assert revision == "0002_project_progress_metric"
+    assert "search_documents" in tables
+    assert revision == "0003_vector_search"

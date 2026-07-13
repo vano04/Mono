@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from .database import Base
 
@@ -227,3 +228,20 @@ class WorkerObservation(Base):
     worker_id: Mapped[str] = mapped_column(String(200))
     metadata_json: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class SearchDocument(Base):
+    __tablename__ = "search_documents"
+    __table_args__ = (
+        UniqueConstraint("document_type", "source_id"),
+        Index("ix_search_document_project_type", "project_id", "document_type"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("search"))
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    document_type: Mapped[str] = mapped_column(String(32))
+    source_id: Mapped[str] = mapped_column(String(64))
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)

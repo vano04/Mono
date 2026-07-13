@@ -1,0 +1,148 @@
+export type Lifecycle = "proposed" | "pending" | "running" | "completed" | "crashed"
+export type Disposition = "kept" | "discarded" | "undecided"
+
+export interface Project {
+  id: string
+  slug: string
+  name: string
+  description: string
+  repository_url: string | null
+  registry_endpoint: string
+  current_baseline_run_id: string | null
+  progress_metric_key: string
+  progress_metric_direction: "lower_is_better" | "higher_is_better"
+  created_at: string
+  updated_at: string
+  active_runs?: number
+  experiment_count?: number
+  worker_count?: number
+}
+
+export interface Experiment {
+  id: string
+  project_id: string
+  display_id: string
+  title: string
+  hypothesis: string
+  reasoning: string
+  implementation_details: string
+  configuration: Record<string, unknown>
+  source: string
+  source_model: string | null
+  lifecycle: Lifecycle
+  disposition: Disposition
+  metric_mode: "curve" | "timings" | "scalar" | "none"
+  priority: number
+  claimed_by: string | null
+  claimed_at: string | null
+  archived_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MetricSeries {
+  latest: number
+  min: number
+  max: number
+  count: number
+  points: Array<{ value: number; step: number | null; timestamp: string }>
+}
+
+export interface Run {
+  id: string
+  project_id: string
+  experiment_id: string | null
+  display_id: string
+  name: string
+  lifecycle: Lifecycle
+  disposition: Disposition
+  hypothesis: string
+  reasoning: string
+  change_summary: string
+  result_summary: string
+  conclusion: string
+  decision_changed: string
+  evidence_used: Array<Record<string, unknown>>
+  metric_mode: string
+  command: string | null
+  git_commit: string | null
+  git_branch: string | null
+  configuration: Record<string, unknown>
+  tags: string[]
+  started_at: string
+  finished_at: string | null
+  archived_at: string | null
+  metrics?: Record<string, MetricSeries>
+  parameters?: Record<string, unknown>
+  events?: Array<{ id: number; message: string; level: string; event_type: string | null; metadata?: Record<string, unknown>; timestamp: string }>
+  artifacts?: Artifact[]
+}
+
+export interface Artifact {
+  id: string
+  name: string
+  size: number
+  content_type: string
+  metadata?: Record<string, unknown>
+  created_at?: string
+}
+
+export interface Dashboard {
+  project: Project
+  experiments: Experiment[]
+  active_runs: Run[]
+  history: Run[]
+  archived: Array<Experiment | Run>
+  baseline: Run | null
+  program: { content: string; version: number }
+  exclusions: string[]
+  counts: Record<string, number>
+  worker_count: number
+  available_metrics: string[]
+  available_tags: string[]
+}
+
+export interface ProgressPoint {
+  run_id: string
+  display_id: string
+  name: string
+  timestamp: string
+  raw_value: number
+  best_value: number
+  is_improvement: boolean
+  improvement: number
+  best_improvement: number
+  baseline_value: number
+  final_step: number | null
+  tags: string[]
+}
+
+export interface ProgressData {
+  metric: string
+  label: string
+  unit: string | null
+  window: string
+  direction: string
+  baseline: number | null
+  best: number | null
+  series: ProgressPoint[]
+}
+
+export interface SearchResult {
+  kind: "experiment" | "run"
+  id: string
+  display_id: string
+  title: string
+  lifecycle: Lifecycle
+  disposition: Disposition
+  hypothesis: string
+  reasoning: string
+  conclusion: string
+  result_summary: string
+  archived: boolean
+  tags: string[]
+  score: number
+  semantic_score?: number
+  match_type?: "keyword" | "semantic" | "hybrid"
+}

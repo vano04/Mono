@@ -31,6 +31,8 @@ def test_sdk_covers_project_search_run_logging_and_artifacts(fresh_database, tmp
         tracked.link_run("RUN-168", "baseline")
         artifact = tracked.log_artifact(str(artifact_path), metadata={"kind": "result"})
         assert artifact["name"] == "result.txt"
+        tracked.log_text("stdout.log", "training complete")
+        tracked.log_config({"learning_rate": 0.01})
         tracked.finish("success", "score 4.2", "SDK flow works")
 
     detail = fresh_database.get(f"/api/v1/runs/{tracked.id}").json()
@@ -38,8 +40,10 @@ def test_sdk_covers_project_search_run_logging_and_artifacts(fresh_database, tmp
     assert detail["disposition"] == "kept"
     assert detail["metrics"]["score"]["latest"] == 4.2
     assert detail["parameters"]["tags"] == ["sdk", "kept"]
+    assert detail["parameters"]["learning_rate"] == 0.01
     assert len(detail["events"]) == 3
     assert detail["artifacts"][0]["metadata"] == {"kind": "result"}
+    assert {artifact["metadata"]["kind"] for artifact in detail["artifacts"]} == {"result", "log", "config"}
 
 
 def test_sdk_context_manager_crashes_run_on_exception(fresh_database):

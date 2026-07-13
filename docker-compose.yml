@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: runtrace
       POSTGRES_USER: runtrace
@@ -21,7 +21,11 @@ services:
       RUNTRACE_DATABASE_URL: postgresql+psycopg://runtrace:runtrace@postgres:5432/runtrace
       RUNTRACE_ARTIFACT_PATH: /data/artifacts
       RUNTRACE_CORS_ORIGINS: http://localhost:3000
-      RUNTRACE_SEED_DEMO: "true"
+      RUNTRACE_SEED_DEMO: "false"
+      RUNTRACE_AUTO_MIGRATE: "false"
+      RUNTRACE_EMBEDDINGS_ENABLED: "true"
+      RUNTRACE_EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+      RUNTRACE_EMBEDDING_CACHE_PATH: /data/models
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,6 +33,7 @@ services:
       - "8000:8000"
     volumes:
       - runtrace-artifacts:/data/artifacts
+      - runtrace-models:/data/models
 
   mcp:
     build:
@@ -43,13 +48,17 @@ services:
 
   web:
     build:
-      context: prototype
+      context: apps/web
+      args:
+        INTERNAL_API_URL: http://api:8000
+    environment:
+      INTERNAL_API_URL: http://api:8000
     depends_on:
       - api
     ports:
-      - "3000:80"
+      - "3000:3000"
 
 volumes:
   runtrace-postgres:
   runtrace-artifacts:
-
+  runtrace-models:

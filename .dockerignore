@@ -7,3 +7,7 @@ data
 prototype/node_modules
 prototype/dist
 prototype/screenshots
+apps/web/node_modules
+apps/web/.next
+tests/.runtime
+.pytest_cache

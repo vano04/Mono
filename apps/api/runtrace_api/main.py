@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .config import ROOT, settings
 from .database import SessionLocal, get_db
+from .embeddings import index_document, semantic_matches
 from .models import (
     Artifact,
     AuditEvent,
@@ -77,12 +78,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+AUTORESEARCH_COMPLETION_STEP = 3350
+AUTORESEARCH_EARLY_RUNTIME_SECONDS = 4000
+AUTORESEARCH_LONG_RUNTIME_SECONDS = 6000
+TEXT_ARTIFACT_SUFFIXES = {".cfg", ".conf", ".csv", ".env", ".ini", ".json", ".jsonl", ".log", ".md", ".out", ".stderr", ".stdout", ".toml", ".txt", ".yaml", ".yml"}
+
 
 def startup() -> None:
     settings.artifact_path.mkdir(parents=True, exist_ok=True)
-    migration_config = Config(str(ROOT / "alembic.ini"))
-    migration_config.set_main_option("sqlalchemy.url", settings.database_url)
-    command.upgrade(migration_config, "head")
+    if settings.auto_migrate:
+        migration_config = Config(str(ROOT / "alembic.ini"))
+        migration_config.set_main_option("sqlalchemy.url", settings.database_url)
+        command.upgrade(migration_config, "head")
     if settings.seed_demo:
         with SessionLocal() as session:
             seed_demo(session)
@@ -168,8 +175,81 @@ def metric_summary(run: Run) -> dict:
     }
 
 
+def _normalise_tags(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(tag).strip().lower() for tag in value if str(tag).strip()]
+
+
+def run_final_step(run: Run) -> int | None:
+    metric_steps = [point.step for point in run.metrics if point.step is not None]
+    if metric_steps:
+        return max(metric_steps)
+    for key in ("final_step", "last_step", "completed_steps"):
+        value = (run.configuration or {}).get(key)
+        if isinstance(value, int):
+            return value
+    if (run.configuration or {}).get("source_file") != "results.tsv":
+        return None
+    text = " ".join([run.name, run.hypothesis, run.result_summary, run.conclusion]).lower()
+    patterns = [
+        r"(?:killed|crashed|stopped|terminated)(?:\s+early)?(?:\s+at)?\s+step\s*([0-9,]+)",
+        r"(?:through|until|to)\s+step\s*([0-9,]+)",
+        r"step\s*([0-9,]+).*?(?:killed|crashed|stopped|not run to completion)",
+        r"\b([0-9][0-9,]{2,})-step\b",
+    ]
+    matches = [int(value.replace(",", "")) for pattern in patterns for value in re.findall(pattern, text)]
+    return max(matches) if matches else None
+
+
+def autoresearch_runtime_seconds(run: Run) -> float | None:
+    if (run.configuration or {}).get("source_file") != "results.tsv":
+        return None
+    values = [point.value for point in run.metrics if point.name == "train_time_s"]
+    return values[-1] if values else None
+
+
+def run_tags(run: Run) -> list[str]:
+    """Return explicit tags plus temporary autoresearch step-derived tags.
+
+    The 3350-step convention lets existing autoresearch data become filterable
+    before producers have been updated to emit explicit tags.
+    """
+    tags = set(_normalise_tags((run.configuration or {}).get("tags")))
+    for parameter in run.parameters:
+        if parameter.name == "tags":
+            tags.update(_normalise_tags(parameter.value))
+    final_step = run_final_step(run)
+    if final_step is not None:
+        if final_step < AUTORESEARCH_COMPLETION_STEP:
+            tags.add("early stop")
+        elif final_step > AUTORESEARCH_COMPLETION_STEP:
+            tags.add("long run")
+    else:
+        runtime = autoresearch_runtime_seconds(run)
+        if runtime is not None and runtime < AUTORESEARCH_EARLY_RUNTIME_SECONDS:
+            tags.add("early stop")
+        elif runtime is not None and runtime > AUTORESEARCH_LONG_RUNTIME_SECONDS:
+            tags.add("long run")
+    if (run.configuration or {}).get("source_file") == "results.tsv" and (run.configuration or {}).get("autoresearch_status") == "crash" and "long run" not in tags:
+        tags.add("early stop")
+    return sorted(tags)
+
+
+def experiment_tags(experiment: Experiment) -> list[str]:
+    return sorted(set(_normalise_tags((experiment.configuration or {}).get("tags"))))
+
+
+def matches_tag_filters(tags: list[str], include_tags: list[str], exclude_tags: list[str]) -> bool:
+    tag_set = set(tags)
+    included = {tag.strip().lower() for tag in include_tags if tag.strip()}
+    excluded = {tag.strip().lower() for tag in exclude_tags if tag.strip()}
+    return included.issubset(tag_set) and tag_set.isdisjoint(excluded)
+
+
 def run_payload(run: Run, detail: bool = False) -> dict:
     payload = RunRead.model_validate(run).model_dump()
+    payload["tags"] = run_tags(run)
     if detail:
         payload.update(
             metrics=metric_summary(run),
@@ -276,6 +356,7 @@ def create_experiment(project: str, body: ExperimentCreate, x_request_id: str | 
     item = Experiment(project_id=current.id, display_id=next_display_id(session, current.id, Experiment, "EXP"), **body.model_dump())
     session.add(item)
     session.flush()
+    index_document(session, item)
     audit(session, current.id, "experiment.proposed", "experiment", item.id, body.source_model or body.source, x_request_id, {"display_id": item.display_id})
     session.commit()
     session.refresh(item)
@@ -406,6 +487,7 @@ def create_run(project: str, body: RunCreate, x_actor: str = Header("agent"), x_
         item.experiment_id = experiment.id
     session.add(item)
     session.flush()
+    index_document(session, item)
     audit(session, current.id, "run.started", "run", item.id, x_actor, x_request_id, {"display_id": item.display_id})
     session.commit()
     return run_payload(get_run(session, item.id), detail=True)
@@ -505,6 +587,8 @@ def finish_run(identifier: str, body: RunFinish, x_actor: str = Header("agent"),
     if run.experiment:
         run.experiment.lifecycle = "completed"
         run.experiment.disposition = body.disposition
+        index_document(session, run.experiment)
+    index_document(session, run)
     audit(session, run.project_id, "run.completed", "run", run.id, x_actor, x_request_id, {"disposition": body.disposition})
     session.commit()
     return run_payload(get_run(session, run.id), detail=True)
@@ -519,6 +603,8 @@ def crash_run(identifier: str, body: RunCrash, x_actor: str = Header("agent"), x
     run.finished_at = now_utc()
     if run.experiment:
         run.experiment.lifecycle = "crashed"
+        index_document(session, run.experiment)
+    index_document(session, run)
     audit(session, run.project_id, "run.crashed", "run", run.id, x_actor, x_request_id, {"error_summary": body.error_summary})
     session.commit()
     return run_payload(get_run(session, run.id), detail=True)
@@ -578,22 +664,47 @@ def download_artifact(artifact_id: str, session: Session = Depends(get_db)) -> F
     return FileResponse(path, media_type=item.content_type, filename=item.name)
 
 
+@app.get("/api/v1/artifacts/{artifact_id}/preview")
+def preview_artifact(artifact_id: str, session: Session = Depends(get_db)) -> dict:
+    item = session.get(Artifact, artifact_id)
+    if not item:
+        raise HTTPException(404, "Artifact not found")
+    path = Path(item.storage_path).resolve()
+    root = settings.artifact_path.resolve()
+    if root not in path.parents or not path.is_file():
+        raise HTTPException(404, "Artifact content not found")
+    is_text = item.content_type.startswith("text/") or item.content_type in {"application/json", "application/x-yaml", "application/xml"} or path.suffix.lower() in TEXT_ARTIFACT_SUFFIXES
+    if not is_text:
+        raise HTTPException(415, "This artifact type cannot be previewed")
+    limit = min(settings.max_artifact_size, 512_000)
+    content = path.read_bytes()[: limit + 1]
+    truncated = len(content) > limit
+    return {"id": item.id, "name": item.name, "content_type": item.content_type, "content": content[:limit].decode("utf-8", errors="replace"), "truncated": truncated}
+
+
 def search_records(session: Session, body: SearchRequest) -> list[dict]:
     project = get_project(session, body.project)
     terms = [term.lower() for term in re.findall(r"[\w-]+", body.query) if len(term) > 1]
+    semantic = semantic_matches(session, project.id, body.query, body.limit) if body.query.strip() else {}
     experiments = session.scalars(select(Experiment).where(Experiment.project_id == project.id, Experiment.deleted_at.is_(None))).all()
-    runs = session.scalars(select(Run).where(Run.project_id == project.id, Run.deleted_at.is_(None))).all()
+    runs = session.scalars(select(Run).options(selectinload(Run.metrics), selectinload(Run.events), selectinload(Run.parameters), selectinload(Run.artifacts)).where(Run.project_id == project.id, Run.deleted_at.is_(None))).all()
     records: list[dict] = []
     for item in experiments:
         if not body.include_archived and item.archived_at:
             continue
         if body.lifecycle and item.lifecycle != body.lifecycle:
             continue
-        haystack = " ".join([item.display_id, item.title, item.hypothesis, item.reasoning, item.implementation_details, json.dumps(item.configuration)]).lower()
-        if terms and not all(term in haystack for term in terms):
+        tags = experiment_tags(item)
+        if not matches_tag_filters(tags, body.include_tags, body.exclude_tags):
             continue
-        score = sum(haystack.count(term) for term in terms) if terms else 1
-        records.append({"kind": "experiment", "id": item.id, "display_id": item.display_id, "title": item.title, "lifecycle": item.lifecycle, "disposition": item.disposition, "hypothesis": item.hypothesis, "reasoning": item.reasoning, "conclusion": "", "result_summary": "", "archived": bool(item.archived_at), "score": score})
+        haystack = " ".join([item.display_id, item.title, item.hypothesis, item.reasoning, item.implementation_details, json.dumps(item.configuration)]).lower()
+        semantic_score = semantic.get(("experiment", item.id), 0.0)
+        keyword_match = not terms or all(term in haystack for term in terms)
+        if terms and not keyword_match and not semantic_score:
+            continue
+        keyword_score = sum(haystack.count(term) for term in terms) if keyword_match and terms else 0
+        score = keyword_score + semantic_score * 10 if terms else 1
+        records.append({"kind": "experiment", "id": item.id, "display_id": item.display_id, "title": item.title, "lifecycle": item.lifecycle, "disposition": item.disposition, "hypothesis": item.hypothesis, "reasoning": item.reasoning, "conclusion": "", "result_summary": "", "archived": bool(item.archived_at), "tags": tags, "score": round(score, 4), "semantic_score": round(semantic_score, 4), "match_type": "hybrid" if semantic_score and keyword_score else "semantic" if semantic_score else "keyword"})
     for item in runs:
         if item.archived_at and not body.include_archived:
             continue
@@ -601,11 +712,17 @@ def search_records(session: Session, body: SearchRequest) -> list[dict]:
             continue
         if body.dispositions and item.disposition not in body.dispositions:
             continue
-        haystack = " ".join([item.display_id, item.name, item.hypothesis, item.reasoning, item.change_summary, item.result_summary, item.conclusion, item.decision_changed, json.dumps(item.configuration), json.dumps(item.evidence_used)]).lower()
-        if terms and not all(term in haystack for term in terms):
+        tags = run_tags(item)
+        if not matches_tag_filters(tags, body.include_tags, body.exclude_tags):
             continue
-        score = sum(haystack.count(term) for term in terms) if terms else 1
-        records.append({"kind": "run", "id": item.id, "display_id": item.display_id, "title": item.name, "lifecycle": item.lifecycle, "disposition": item.disposition, "hypothesis": item.hypothesis, "reasoning": item.reasoning, "conclusion": item.conclusion, "result_summary": item.result_summary, "decision_changed": item.decision_changed, "evidence_used": item.evidence_used, "archived": bool(item.archived_at), "score": score, "finished_at": item.finished_at})
+        haystack = " ".join([item.display_id, item.name, item.hypothesis, item.reasoning, item.change_summary, item.result_summary, item.conclusion, item.decision_changed, json.dumps(item.configuration), json.dumps(item.evidence_used), json.dumps({parameter.name: parameter.value for parameter in item.parameters}), " ".join(event.message for event in item.events), " ".join(artifact.name + " " + json.dumps(artifact.metadata_json) for artifact in item.artifacts), " ".join(tags)]).lower()
+        semantic_score = semantic.get(("run", item.id), 0.0)
+        keyword_match = not terms or all(term in haystack for term in terms)
+        if terms and not keyword_match and not semantic_score:
+            continue
+        keyword_score = sum(haystack.count(term) for term in terms) if keyword_match and terms else 0
+        score = keyword_score + semantic_score * 10 if terms else 1
+        records.append({"kind": "run", "id": item.id, "display_id": item.display_id, "title": item.name, "lifecycle": item.lifecycle, "disposition": item.disposition, "hypothesis": item.hypothesis, "reasoning": item.reasoning, "conclusion": item.conclusion, "result_summary": item.result_summary, "decision_changed": item.decision_changed, "evidence_used": item.evidence_used, "archived": bool(item.archived_at), "tags": tags, "score": round(score, 4), "semantic_score": round(semantic_score, 4), "match_type": "hybrid" if semantic_score and keyword_score else "semantic" if semantic_score else "keyword", "finished_at": item.finished_at})
     def sort_timestamp(record: dict) -> float:
         finished_at = record.get("finished_at")
         if not finished_at:
@@ -625,8 +742,8 @@ def search(body: SearchRequest, session: Session = Depends(get_db)) -> dict:
 
 
 @app.get("/api/v1/projects/{project}/search")
-def search_get(project: str, q: str = "", include_archived: bool = False, limit: int = Query(10, ge=1, le=100), session: Session = Depends(get_db)) -> dict:
-    return search(SearchRequest(project=project, query=q, include_archived=include_archived, limit=limit), session)
+def search_get(project: str, q: str = "", include_archived: bool = False, include_tag: list[str] = Query(default=[]), exclude_tag: list[str] = Query(default=[]), limit: int = Query(10, ge=1, le=100), session: Session = Depends(get_db)) -> dict:
+    return search(SearchRequest(project=project, query=q, include_archived=include_archived, include_tags=include_tag, exclude_tags=exclude_tag, limit=limit), session)
 
 
 @app.get("/api/v1/projects/{project}/context")
@@ -653,7 +770,7 @@ def project_context(project: str, session: Session = Depends(get_db)) -> dict:
 
 
 @app.get("/api/v1/projects/{project}/progress")
-def progress(project: str, metric: str | None = None, window: str = "30d", session: Session = Depends(get_db)) -> dict:
+def progress(project: str, metric: str | None = None, window: str = "30d", include_tag: list[str] = Query(default=[]), exclude_tag: list[str] = Query(default=[]), session: Session = Depends(get_db)) -> dict:
     current = get_project(session, project)
     metric = metric or current.progress_metric_key
     definition = session.scalar(select(MetricDefinition).where(MetricDefinition.project_id == current.id, MetricDefinition.key == metric))
@@ -663,7 +780,7 @@ def progress(project: str, metric: str | None = None, window: str = "30d", sessi
         cutoff = now_utc() - timedelta(days=7)
     elif window == "30d":
         cutoff = now_utc() - timedelta(days=30)
-    runs = session.scalars(select(Run).options(selectinload(Run.metrics)).where(Run.project_id == current.id, Run.lifecycle == "completed", Run.archived_at.is_(None), Run.deleted_at.is_(None)).order_by(Run.finished_at)).all()
+    runs = session.scalars(select(Run).options(selectinload(Run.metrics), selectinload(Run.parameters)).where(Run.project_id == current.id, Run.lifecycle == "completed", Run.archived_at.is_(None), Run.deleted_at.is_(None)).order_by(Run.finished_at)).all()
     values = []
     for run in runs:
         finished_at = run.finished_at
@@ -671,16 +788,19 @@ def progress(project: str, metric: str | None = None, window: str = "30d", sessi
             finished_at = finished_at.replace(tzinfo=timezone.utc)
         if cutoff and finished_at and finished_at < cutoff:
             continue
+        tags = run_tags(run)
+        if not matches_tag_filters(tags, include_tag, exclude_tag):
+            continue
         points = [point for point in run.metrics if point.name == metric]
         if points:
             latest = max(points, key=lambda point: (point.step or 0, point.timestamp))
-            values.append((run, latest.value))
+            values.append((run, latest.value, tags))
     if not values:
         return {"metric": metric, "label": definition.label if definition else metric, "unit": definition.unit if definition else None, "window": window, "direction": direction, "baseline": None, "best": None, "series": []}
     baseline = values[0][1]
     series = []
     best = baseline
-    for run, value in values:
+    for run, value, tags in values:
         is_improvement = not series or (value > best if direction == "higher_is_better" else value < best)
         if is_improvement:
             best = value
@@ -693,7 +813,7 @@ def progress(project: str, metric: str | None = None, window: str = "30d", sessi
         else:
             improvement = (baseline - value) / abs(baseline) * 100
             best_improvement = (baseline - best) / abs(baseline) * 100
-        series.append({"run_id": run.id, "display_id": run.display_id, "timestamp": run.finished_at, "raw_value": value, "best_value": best, "is_improvement": is_improvement, "improvement": round(improvement, 4), "best_improvement": round(best_improvement, 4), "baseline_value": baseline})
+        series.append({"run_id": run.id, "display_id": run.display_id, "name": run.name, "timestamp": run.finished_at, "raw_value": value, "best_value": best, "is_improvement": is_improvement, "improvement": round(improvement, 4), "best_improvement": round(best_improvement, 4), "baseline_value": baseline, "final_step": run_final_step(run), "tags": tags})
     return {"metric": metric, "label": definition.label if definition else metric, "unit": definition.unit if definition else None, "window": window, "direction": direction, "baseline": baseline, "best": best, "series": series}
 
 
@@ -715,6 +835,7 @@ def dashboard(project: str, session: Session = Depends(get_db)) -> dict:
     counts.update(item.disposition for item in history)
     counts["crashed"] = len([item for item in history if item.lifecycle == "crashed"])
     workers = session.scalar(select(func.count()).select_from(WorkerObservation).where(WorkerObservation.project_id == current.id)) or 0
+    all_tags = sorted({tag for item in experiments for tag in experiment_tags(item)} | {tag for item in runs for tag in run_tags(item)})
     return {
         "project": ProjectRead.model_validate(current).model_dump(),
         "experiments": [ExperimentRead.model_validate(item).model_dump() for item in active_experiments],
@@ -727,6 +848,7 @@ def dashboard(project: str, session: Session = Depends(get_db)) -> dict:
         "counts": dict(counts),
         "worker_count": workers,
         "available_metrics": available_metric_names(session, current.id),
+        "available_tags": all_tags,
     }
 
 

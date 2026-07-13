@@ -196,4 +196,6 @@ class SearchRequest(BaseModel):
     include_archived: bool = False
     lifecycle: str | None = None
     dispositions: list[str] = Field(default_factory=list)
+    include_tags: list[str] = Field(default_factory=list)
+    exclude_tags: list[str] = Field(default_factory=list)
     limit: int = Field(default=10, ge=1, le=100)

@@ -112,13 +112,15 @@ class Run:
 
     def __enter__(self) -> "Run":
         cwd = self.options.pop("working_directory", os.getcwd())
+        configuration = dict(self.options.pop("configuration", {}))
+        configuration["tags"] = self.tags
         payload = {
             "name": self.name,
             "hypothesis": self.hypothesis,
             "reasoning": self.reasoning,
             "working_directory": cwd,
             "command": " ".join(sys.argv),
-            "configuration": {"tags": self.tags},
+            "configuration": configuration,
             **_metadata(cwd),
             **self.options,
         }
@@ -168,24 +170,43 @@ class Run:
     def link_run(self, run_id: str, relationship: str) -> None:
         self.log_event(f"Linked {run_id} as {relationship}", event_type="run.relationship", metadata={"run_id": run_id, "relationship": relationship})
 
-    def log_artifact(self, path: str, name: str | None = None, metadata: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    def _upload_artifact(self, name: str, content: Any, content_type: str, metadata: dict[str, Any] | None = None, kind: str = "artifact") -> dict[str, Any] | None:
         if not self.id:
             return None
+        try:
+            artifact_metadata = {"kind": kind, **(metadata or {})}
+            response = self.client.client.post(
+                f"/api/v1/runs/{self.id}/artifacts",
+                files={"file": (name, content, content_type)},
+                data={"metadata": json.dumps(artifact_metadata)},
+            )
+            response.raise_for_status()
+            return response.json()
+        except (OSError, httpx.HTTPError):
+            if self.client.strict:
+                raise
+            warnings.warn(f"RunTrace could not upload artifact {name}", RuntimeWarning, stacklevel=2)
+            return None
+
+    def log_artifact(self, path: str, name: str | None = None, metadata: dict[str, Any] | None = None, kind: str = "artifact") -> dict[str, Any] | None:
         artifact_path = Path(path)
         try:
             with artifact_path.open("rb") as handle:
-                response = self.client.client.post(
-                    f"/api/v1/runs/{self.id}/artifacts",
-                    files={"file": (name or artifact_path.name, handle)},
-                    data={"metadata": json.dumps(metadata or {})},
-                )
-                response.raise_for_status()
-                return response.json()
-        except (OSError, httpx.HTTPError):
+                return self._upload_artifact(name or artifact_path.name, handle, "application/octet-stream", metadata, kind)
+        except OSError:
             if self.client.strict:
                 raise
             warnings.warn(f"RunTrace could not upload artifact {artifact_path}", RuntimeWarning, stacklevel=2)
             return None
+
+    def log_text(self, name: str, content: str, kind: str = "log", metadata: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        """Save previewable text output such as stdout, stderr, reports, or logs."""
+        return self._upload_artifact(name, content.encode("utf-8"), "text/plain", metadata, kind)
+
+    def log_config(self, values: dict[str, Any], name: str = "config.json", metadata: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        """Save configuration as both queryable parameters and a versioned JSON artifact."""
+        self.log_params(values)
+        return self._upload_artifact(name, json.dumps(values, indent=2, sort_keys=True).encode("utf-8"), "application/json", metadata, "config")
 
     def finish(self, outcome: str, result_summary: str | None = None, conclusion: str | None = None) -> None:
         disposition = {"success": "kept", "partial_success": "kept", "failure": "discarded", "inconclusive": "undecided"}.get(outcome, outcome)

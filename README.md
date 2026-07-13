@@ -1,74 +1,93 @@
 # RunTrace
 
-RunTrace is a self-hosted experiment registry and persistent memory layer for autonomous research agents. It keeps hypotheses, prior evidence, code metadata, live metrics, outcomes, and conclusions together so a new agent can avoid repeating an old experiment.
+RunTrace v0.1 is a self-hosted experiment registry and persistent memory layer for autonomous research agents. It keeps hypotheses, prior evidence, code metadata, live metrics, outcomes, and conclusions together so each new run can build on what was already learned.
 
-This repository contains the MVP described in [`runtrace-implementation-spec.md`](./runtrace-implementation-spec.md) and preserves the accepted interface in [`prototype/`](./prototype/).
+The application starts empty. Create the first project in the web app or through the API; no sample project or experiment data is inserted by the default configuration.
 
-## What ships
+## Stack
 
-- project-scoped FastAPI service with SQLite for native development and PostgreSQL in Docker
-- durable projects, versioned `program.md`, exclusions, proposals, claims, runs, metrics, events, parameters, artifacts, baselines, workers, and audit events
-- atomic compare-and-update claim behavior
-- project context and evidence search endpoints
-- live run updates over Server-Sent Events
-- project progress settings that use exact emitted metric names and render strict best-so-far step charts
-- Python SDK and `runtrace exec` CLI wrapper
-- MCP tools for context, search, proposing/claiming work, run creation, metric/event logging, and completion
-- seeded Dense Optimizer demo and the approved responsive React dashboard
+- Next.js 16, TypeScript, Tailwind CSS, and shadcn/ui
+- FastAPI, SQLAlchemy 2, and Pydantic
+- PostgreSQL 17 with pgvector
+- `BAAI/bge-small-en-v1.5` embeddings through FastEmbed
+- Server-Sent Events for live run metrics, events, and status
+- Python SDK, CLI, and Python MCP SDK server
+- Docker Compose for the complete deployment
 
-## Quick start (native)
+## Included workflows
+
+- create and search project-scoped registries
+- edit versioned `program.md` and research exclusions
+- propose and atomically claim experiments
+- create, stream, complete, crash, archive, restore, and soft-delete runs
+- record metrics, parameters, events, source metadata, and downloadable artifacts
+- set an auditable completed-run baseline
+- render strict best-so-far progress for an exact emitted metric name
+- hybrid semantic and keyword evidence retrieval, backed by pgvector
+- retrieve the complete agent bootstrap context through HTTP, CLI, SDK, or MCP
+
+## Run the full stack
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+- Web app: `http://localhost:3000`
+- API health: `http://localhost:8000/health`
+- Interactive API reference: `http://localhost:8000/docs`
+
+The embedding model is downloaded into the `runtrace-models` Docker volume when semantic indexing is first needed. Keyword retrieval remains available if the model cannot be loaded.
+
+To clear all database, artifact, and model volumes:
+
+```bash
+docker compose down -v
+```
+
+## Native development
+
+Native API development expects PostgreSQL with the `vector` extension. Copy `.env.example`, adjust the database URL, then run:
 
 ```bash
 UV_CACHE_DIR=.uv-cache uv sync --extra dev
-uv run uvicorn runtrace_api.main:app --reload --port 8000
+UV_CACHE_DIR=.uv-cache uv run uvicorn runtrace_api.main:app --reload --port 8000
 ```
 
-In another terminal:
+In a second terminal:
 
 ```bash
-cd prototype
+cd apps/web
+npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. The Vite dev server proxies `/api` to the API.
-
-## Quick start (Docker)
-
-Start Docker Desktop, then run:
-
-```bash
-docker-compose up --build
-```
-
-Open `http://localhost:3000`. API documentation is at `http://localhost:8000/docs`. If your Docker installation exposes Compose as a CLI plugin, `docker compose up --build` is equivalent.
-
-Reset the seeded demo (this intentionally clears the local demo database):
-
-```bash
-./scripts/reset-demo.sh
-```
+The Next.js server proxies `/api/*` to `INTERNAL_API_URL`, which defaults to `http://localhost:8000`.
 
 ## Agent closed loop
 
 ```bash
-runtrace context dense-optimizer
-runtrace search dense-optimizer "power iteration runtime"
-runtrace exec --project dense-optimizer --name two-step-test \
-  --hypothesis "Two steps preserve quality with less runtime" -- \
-  python examples/metric_demo.py
+runtrace context <project-slug>
+runtrace search <project-slug> "what has already been tried?"
+runtrace exec --project <project-slug> --name "new variation" \
+  --hypothesis "this should improve the primary metric" -- \
+  python benchmark.py
 ```
 
-The MCP server uses stdio and reads `RUNTRACE_BASE_URL`:
+Run the MCP server over stdio:
 
 ```bash
 RUNTRACE_BASE_URL=http://localhost:8000 runtrace-mcp
 ```
 
-## Tests
+## Verification
 
 ```bash
 UV_CACHE_DIR=.uv-cache uv run pytest
-npm --prefix prototype run build
+npm --prefix apps/web run lint
+npm --prefix apps/web run build
+docker compose config
 ```
 
-The API remains useful without OpenAI credentials or embeddings; keyword evidence retrieval is the default MVP path.
+The historical `prototype/` directory is retained only as the accepted design source. Docker and development commands use the production Next.js app in `apps/web/`.

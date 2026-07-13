@@ -71,6 +71,55 @@ def test_artifact_validation_search_variants_and_settings(fresh_database):
     assert "validation_loss" in settings["available_metrics"]
 
 
+def test_tag_filters_and_text_artifact_preview(fresh_database):
+    run_id = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/runs",
+        json={"name": "Tagged completed run", "configuration": {"tags": ["nightly"]}},
+    ).json()["id"]
+    fresh_database.post(
+        f"/api/v1/runs/{run_id}/metrics",
+        json={"metrics": [{"name": "validation_loss", "value": 3.1, "step": 3350}]},
+    )
+    fresh_database.post(f"/api/v1/runs/{run_id}/finish", json={"disposition": "kept"})
+
+    included = fresh_database.get("/api/v1/projects/dense-optimizer/search?include_tag=nightly&limit=50").json()["results"]
+    assert {result["id"] for result in included} == {run_id}
+    assert included[0]["tags"] == ["nightly"]
+    assert fresh_database.get("/api/v1/projects/dense-optimizer/progress?include_tag=nightly").json()["series"][0]["final_step"] == 3350
+    assert fresh_database.get("/api/v1/projects/dense-optimizer/progress?exclude_tag=early%20stop").json()["series"][0]["run_id"] == run_id
+
+    uploaded = fresh_database.post(
+        f"/api/v1/runs/{run_id}/artifacts",
+        files={"file": ("training.log", b"step=3350 loss=3.1", "text/plain")},
+        data={"metadata": '{"kind":"log"}'},
+    ).json()
+    preview = fresh_database.get(f"/api/v1/artifacts/{uploaded['id']}/preview")
+    assert preview.status_code == 200
+    assert preview.json()["content"] == "step=3350 loss=3.1"
+
+
+def test_imported_autoresearch_runtime_fallback_tags(fresh_database):
+    early_id = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/runs",
+        json={"name": "Imported early run", "configuration": {"source_file": "results.tsv", "autoresearch_status": "discard"}},
+    ).json()["id"]
+    fresh_database.post(f"/api/v1/runs/{early_id}/metrics", json={"metrics": [
+        {"name": "validation_loss", "value": 4.0}, {"name": "train_time_s", "value": 900},
+    ]})
+    fresh_database.post(f"/api/v1/runs/{early_id}/finish", json={"disposition": "discarded"})
+    long_id = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/runs",
+        json={"name": "Imported extended run", "configuration": {"source_file": "results.tsv", "autoresearch_status": "keep"}},
+    ).json()["id"]
+    fresh_database.post(f"/api/v1/runs/{long_id}/metrics", json={"metrics": [
+        {"name": "validation_loss", "value": 3.0}, {"name": "train_time_s", "value": 8000},
+    ]})
+    fresh_database.post(f"/api/v1/runs/{long_id}/finish", json={"disposition": "kept"})
+
+    assert fresh_database.get(f"/api/v1/runs/{early_id}").json()["tags"] == ["early stop"]
+    assert fresh_database.get(f"/api/v1/runs/{long_id}").json()["tags"] == ["long run"]
+
+
 def test_experiment_delete_and_claim_next(fresh_database):
     claimed = fresh_database.post("/api/v1/projects/dense-optimizer/experiments/claim", json={"worker_id": "next-worker"})
     assert claimed.status_code == 200
