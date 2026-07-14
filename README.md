@@ -105,6 +105,14 @@ You do not need to clone the repository on an agent or application host. Install
 uv tool install runtrace-ai
 ```
 
+From a repository checkout, the install helper installs or updates to the latest PyPI release and verifies the CLI:
+
+```bash
+./scripts/install.sh
+```
+
+Pass a version to install a specific release, for example `./scripts/install.sh 0.1.3`.
+
 For Python applications:
 
 ```bash
