@@ -10,6 +10,7 @@ from typing import Annotated
 import typer
 
 from .client import RunTrace
+from .credentials import resolve_connection, save_credentials
 
 
 app = typer.Typer(no_args_is_help=True, help="Track experiments and query RunTrace memory.")
@@ -17,15 +18,40 @@ integrations_app = typer.Typer(no_args_is_help=True, help="Install RunTrace in s
 app.add_typer(integrations_app, name="integrations")
 
 
-def client(base_url: str, api_token: str | None) -> RunTrace:
-    return RunTrace(base_url=base_url, api_token=api_token, strict=True)
+def client(base_url: str | None, api_token: str | None) -> RunTrace:
+    resolved_base_url, resolved_api_token = resolve_connection(base_url, api_token)
+    return RunTrace(base_url=resolved_base_url, api_token=resolved_api_token, strict=True)
+
+
+@app.command()
+def auth(
+    api_key: Annotated[str, typer.Argument(help="Agent API key, or '-' to read it from stdin.")],
+    base_url: str | None = typer.Option(None, envvar="RUNTRACE_BASE_URL", help="RunTrace API URL."),
+) -> None:
+    """Authenticate the CLI and MCP tool with an agent API key."""
+    if api_key == "-":
+        api_key = sys.stdin.readline().strip()
+    if not api_key:
+        raise typer.BadParameter("API key cannot be empty")
+
+    resolved_base_url, _ = resolve_connection(base_url, api_key)
+    status = RunTrace(
+        base_url=resolved_base_url,
+        api_token=api_key,
+        strict=True,
+    ).request("GET", "/api/v1/auth/status")
+    if not status.get("authenticated"):
+        raise typer.BadParameter("RunTrace rejected this API key")
+
+    path = save_credentials(resolved_base_url, api_key)
+    typer.echo(f"Authenticated with {resolved_base_url}. Credentials saved to {path}")
 
 
 @app.command()
 def search(
     project: str,
     query: str,
-    base_url: str = typer.Option("http://localhost:8000", envvar="RUNTRACE_BASE_URL"),
+    base_url: str | None = typer.Option(None, envvar="RUNTRACE_BASE_URL"),
     api_token: str | None = typer.Option(None, envvar="RUNTRACE_API_TOKEN", hidden=True),
     limit: int = 10,
 ) -> None:
@@ -36,7 +62,7 @@ def search(
 @app.command("context")
 def context_command(
     project: str,
-    base_url: str = typer.Option("http://localhost:8000", envvar="RUNTRACE_BASE_URL"),
+    base_url: str | None = typer.Option(None, envvar="RUNTRACE_BASE_URL"),
     api_token: str | None = typer.Option(None, envvar="RUNTRACE_API_TOKEN", hidden=True),
 ) -> None:
     result = client(base_url, api_token).request("GET", f"/api/v1/projects/{project}/context")
@@ -53,7 +79,7 @@ def exec(
     name: str = typer.Option(...),
     hypothesis: str = typer.Option(...),
     reasoning: str = typer.Option(""),
-    base_url: str = typer.Option("http://localhost:8000", envvar="RUNTRACE_BASE_URL"),
+    base_url: str | None = typer.Option(None, envvar="RUNTRACE_BASE_URL"),
     api_token: str | None = typer.Option(None, envvar="RUNTRACE_API_TOKEN", hidden=True),
 ) -> None:
     command = list(ctx.args)
@@ -107,10 +133,7 @@ def install_integration(
         typer.echo("$ " + " ".join(command))
         if not dry_run:
             subprocess.run(command, check=True)
-    typer.echo(
-        "RunTrace plugin installed. Export RUNTRACE_BASE_URL and RUNTRACE_API_TOKEN "
-        "before starting the agent CLI."
-    )
+    typer.echo("RunTrace plugin installed. Run 'runtrace auth API_KEY' to authenticate it.")
 
 
 if __name__ == "__main__":

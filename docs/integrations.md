@@ -1,13 +1,27 @@
 # CLI, Python, Codex, and Claude Code
 
-RunTrace clients connect to a deployed RunTrace API. Normal mode requires an agent token; create one in the web app under **Access → Your agent tokens**. Export it in the shell that starts the client:
+RunTrace clients connect to a deployed RunTrace API. Normal mode requires an agent token; create one in the web app under **Access → Your agent tokens**. Authenticate once for the CLI and MCP plugins:
+
+```bash
+runtrace auth "rt_..." --base-url "https://runtrace.example.com"
+```
+
+The command validates the token before saving it to `~/.config/runtrace/credentials.json` with user-only permissions. The MCP server rereads this file for each request, so an already-running Codex tool can use the new key immediately. `XDG_CONFIG_HOME` is respected.
+
+To avoid placing the key in shell history, pass `-` and enter or pipe the key on standard input:
+
+```bash
+runtrace auth - --base-url "https://runtrace.example.com"
+```
+
+Environment variables are still supported and take precedence over the saved file:
 
 ```bash
 export RUNTRACE_BASE_URL="https://runtrace.example.com"
 export RUNTRACE_API_TOKEN="rt_..."
 ```
 
-The token is displayed once and stored by RunTrace only as a SHA-256 digest. Keep it in a secret manager, never in a repository or command history.
+The token is displayed once by RunTrace and stored by the server only as a SHA-256 digest. Keep it in a secret manager and never in a repository.
 
 ## Standalone CLI
 
@@ -55,7 +69,7 @@ codex plugin marketplace add vano04/RunTrace --ref master
 codex plugin add runtrace@runtrace
 ```
 
-Or run `runtrace integrations install codex`. Restart Codex after exporting the connection variables. The plugin launches MCP with `uvx`, so it needs no repository clone or persistent Python environment.
+Or run `runtrace integrations install codex`, then run `runtrace auth`. The plugin launches MCP with `uvx`, so it needs no repository clone or persistent Python environment.
 
 ## Claude Code plugin
 
@@ -64,7 +78,7 @@ claude plugin marketplace add vano04/RunTrace
 claude plugin install runtrace@runtrace --scope user
 ```
 
-Or run `runtrace integrations install claude`, then restart Claude Code after exporting the connection variables.
+Or run `runtrace integrations install claude`, then run `runtrace auth`.
 
 ## Direct MCP fallback
 
@@ -74,4 +88,4 @@ Any stdio MCP host can run:
 uvx --from 'runtrace[mcp] @ git+https://github.com/vano04/RunTrace.git@v0.1.0' runtrace-mcp
 ```
 
-The host needs `uv`, `RUNTRACE_BASE_URL`, and `RUNTRACE_API_TOKEN`. Its first launch needs network access to GitHub and the Python package index.
+The host needs `uv` plus either credentials saved by `runtrace auth` or the `RUNTRACE_BASE_URL` and `RUNTRACE_API_TOKEN` environment variables. Its first launch needs network access to GitHub and the Python package index.

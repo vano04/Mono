@@ -100,7 +100,13 @@ For Python applications:
 python -m pip install 'runtrace @ git+https://github.com/vano04/RunTrace.git@v0.1.0'
 ```
 
-In normal mode, create a token at **Access → Your agent tokens**, then export `RUNTRACE_BASE_URL` and `RUNTRACE_API_TOKEN`. The CLI can retrieve context, search evidence, and track a command:
+In normal mode, create a token at **Access → Your agent tokens**, then authenticate the CLI and installed MCP plugin:
+
+```bash
+runtrace auth rt_... --base-url https://runtrace.example.com
+```
+
+This validates the key and saves it in a private user-level credential file. `RUNTRACE_BASE_URL` and `RUNTRACE_API_TOKEN` remain supported and take precedence over saved credentials. The CLI can then retrieve context, search evidence, and track a command:
 
 ```bash
 runtrace context <project-slug>
@@ -138,7 +144,7 @@ If the RunTrace CLI is already installed, `runtrace integrations install codex` 
 | --- | --- |
 | `RUNTRACE_DATABASE_URL` | SQLAlchemy database connection URL |
 | `RUNTRACE_BASE_URL` | API URL used by CLI, SDK, and MCP clients |
-| `RUNTRACE_API_TOKEN` | Agent bearer token used by headless clients |
+| `RUNTRACE_API_TOKEN` | Agent bearer token used by headless clients; overrides `runtrace auth` credentials |
 | `RUNTRACE_ARTIFACT_PATH` | Local artifact storage directory |
 | `RUNTRACE_CORS_ORIGINS` | Comma-separated browser origins |
 | `RUNTRACE_DEV` | Disable auth for trusted local development only |

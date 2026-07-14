@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from runtrace.credentials import resolve_connection
 
 
-BASE_URL = os.getenv("RUNTRACE_BASE_URL", "http://localhost:8000").rstrip("/")
-API_TOKEN = os.getenv("RUNTRACE_API_TOKEN") or os.getenv("RUNTRACE_API_KEY")
 mcp = FastMCP("RunTrace")
 
 
 def request(method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
-    headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
-    with httpx.Client(base_url=BASE_URL, timeout=15, headers=headers) as client:
+    base_url, api_token = resolve_connection()
+    headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
+    with httpx.Client(base_url=base_url, timeout=15, headers=headers) as client:
         response = client.request(method, path, json=payload)
         response.raise_for_status()
         return response.json() if response.content else None

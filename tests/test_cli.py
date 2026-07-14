@@ -49,6 +49,47 @@ def test_cli_search_and_context_commands(monkeypatch):
     assert json.loads(context.stdout)["path"].endswith("/context")
 
 
+def test_cli_auth_validates_and_saves_credentials(monkeypatch, tmp_path):
+    saved = {}
+
+    class AuthClient:
+        def __init__(self, **kwargs):
+            saved["client"] = kwargs
+
+        def request(self, method, path):
+            saved["request"] = (method, path)
+            return {"authenticated": True}
+
+    monkeypatch.setattr(cli, "RunTrace", AuthClient)
+    monkeypatch.setattr(cli, "save_credentials", lambda base_url, api_key: saved.update(
+        base_url=base_url, api_key=api_key
+    ) or tmp_path / "credentials.json")
+
+    result = runner.invoke(cli.app, ["auth", "rt_secret", "--base-url", "https://trace.example/"])
+
+    assert result.exit_code == 0
+    assert saved["client"]["api_token"] == "rt_secret"
+    assert saved["request"] == ("GET", "/api/v1/auth/status")
+    assert saved["base_url"] == "https://trace.example"
+    assert saved["api_key"] == "rt_secret"
+    assert "rt_secret" not in result.stdout
+
+
+def test_cli_auth_rejects_invalid_key_without_saving(monkeypatch):
+    class AuthClient:
+        def __init__(self, **_kwargs): pass
+        def request(self, _method, _path): return {"authenticated": False}
+
+    monkeypatch.setattr(cli, "RunTrace", AuthClient)
+    monkeypatch.setattr(cli, "save_credentials", lambda *_args: (_ for _ in ()).throw(
+        AssertionError("invalid credentials must not be saved")
+    ))
+
+    result = runner.invoke(cli.app, ["auth", "invalid"])
+    assert result.exit_code != 0
+    assert "rejected" in result.output
+
+
 def test_cli_exec_parses_metric_and_event_output(monkeypatch):
     fake = FakeClient()
     monkeypatch.setattr(cli, "client", lambda _base_url, _api_token: fake)

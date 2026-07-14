@@ -53,3 +53,33 @@ def test_mcp_http_errors_are_not_silenced(monkeypatch):
     monkeypatch.setattr(server.httpx, "Client", Client)
     with pytest.raises(RuntimeError, match="backend failed"):
         server.request("GET", "/health")
+
+
+def test_mcp_resolves_saved_credentials_for_each_request(monkeypatch):
+    captured = []
+
+    class Response:
+        content = b'{"ok": true}'
+        def raise_for_status(self): pass
+        def json(self): return {"ok": True}
+
+    class Client:
+        def __init__(self, **kwargs): captured.append(kwargs)
+        def __enter__(self): return self
+        def __exit__(self, *_): return None
+        def request(self, *_args, **_kwargs): return Response()
+
+    credentials = iter([
+        ("https://one.example", "rt_one"),
+        ("https://two.example", "rt_two"),
+    ])
+    monkeypatch.setattr(server, "resolve_connection", lambda: next(credentials))
+    monkeypatch.setattr(server.httpx, "Client", Client)
+
+    server.request("GET", "/health")
+    server.request("GET", "/health")
+
+    assert captured[0]["base_url"] == "https://one.example"
+    assert captured[0]["headers"] == {"Authorization": "Bearer rt_one"}
+    assert captured[1]["base_url"] == "https://two.example"
+    assert captured[1]["headers"] == {"Authorization": "Bearer rt_two"}
