@@ -35,6 +35,8 @@ RUNTRACE_SETUP_LINK_TTL_HOURS=24
 
 Changing the RP ID or public origin makes existing passkeys unusable. Production deployments should use HTTPS and a stable hostname.
 
+Normal mode currently authenticates browser requests with the session cookie created by a passkey ceremony. The Python SDK, CLI, and MCP server do not yet implement a non-interactive credential flow, so authenticated remote agent access is not supported in this release. Do not enable development mode or bypass API authentication to work around that limitation on a public instance.
+
 ## Development split
 
 `RUNTRACE_DEV=true` is intentionally unauthenticated. It synthesizes owner access for every request and keeps the seeded preview and existing test workflows free of onboarding. Do not expose this mode outside a trusted development machine.

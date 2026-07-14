@@ -1,68 +1,66 @@
 # RunTrace
 
-RunTrace v0.1 is a self-hosted experiment registry and persistent memory layer for autonomous research agents. It keeps hypotheses, prior evidence, code metadata, live metrics, outcomes, and conclusions together so each new run can build on what was already learned.
+RunTrace is a self-hosted experiment registry and persistent memory layer for autonomous research agents. It keeps hypotheses, code metadata, live metrics, artifacts, outcomes, and conclusions together so future runs can build on prior evidence.
 
-The application starts empty. Create the first project in the web app or through the API; no sample project or experiment data is inserted by the default configuration.
+The repository contains the maintained FastAPI service, Next.js application, Python SDK/CLI, and MCP server. A new installation starts empty unless the development seed is explicitly enabled.
 
-## Stack
+## What it provides
 
-- Next.js 16, TypeScript, Tailwind CSS, and shadcn/ui
-- FastAPI, SQLAlchemy 2, and Pydantic
-- PostgreSQL 17 with pgvector
-- `BAAI/bge-small-en-v1.5` embeddings through FastEmbed
-- Server-Sent Events for live run metrics, events, and status
-- Python SDK, CLI, and Python MCP SDK server
-- Docker Compose for the complete deployment
+- project-scoped experiment proposals and atomic worker claims;
+- live run metrics and events over Server-Sent Events;
+- parameters, Git metadata, logs, and downloadable artifacts;
+- versioned `program.md` instructions and research exclusions;
+- completed-run baselines and best-so-far progress charts;
+- archive, restore, soft-delete, and audit history;
+- keyword search, with optional pgvector semantic retrieval;
+- browser passkey authentication for a self-hosted instance;
+- HTTP, Python, CLI, and MCP interfaces.
 
-## Included workflows
+## Architecture
 
-- create and search project-scoped registries
-- edit versioned `program.md` and research exclusions
-- propose and atomically claim experiments
-- create, stream, complete, crash, archive, restore, and soft-delete runs
-- record metrics, parameters, events, source metadata, and downloadable artifacts
-- set an auditable completed-run baseline
-- render strict best-so-far progress for an exact emitted metric name
-- hybrid semantic and keyword evidence retrieval, backed by pgvector
-- retrieve the complete agent bootstrap context through HTTP, CLI, SDK, or MCP
+| Component | Location | Technology |
+| --- | --- | --- |
+| API | `apps/api` | FastAPI, SQLAlchemy, Alembic |
+| Web app | `apps/web` | Next.js 16, React 19, TypeScript, Tailwind CSS |
+| Python client and CLI | `packages/python_sdk` | HTTPX, Typer |
+| MCP server | `apps/mcp` | Python MCP SDK |
+| Database | Compose service | PostgreSQL 17 with pgvector |
 
-## Run the full stack
+## Quick start
+
+Requirements: Docker with Compose support. From the repository root:
 
 ```bash
 docker compose up --build
 ```
 
-The default stack stores projects and experiment data in the persistent PostgreSQL volume. Stopping and starting Compose reloads that data; use `docker compose down -v` only when you intend to erase it.
+Open <http://localhost:3000>. On a fresh database, the first browser enrolls the instance owner and a passkey. Data is stored in named PostgreSQL and artifact volumes and survives `docker compose down`.
 
-For the seeded, no-auth development preview, set the development flag on startup:
+Useful endpoints:
+
+- web app: <http://localhost:3000>
+- API health: <http://localhost:8000/health>
+- OpenAPI UI: <http://localhost:8000/docs>
+
+To run a local, unauthenticated instance populated with demonstration records:
 
 ```bash
 RUNTRACE_DEV=true docker compose up --build
 ```
 
-Demo records are inserted only when the database is empty. Run `./scripts/reset-demo.sh` to recreate the preview from a clean volume.
+`RUNTRACE_DEV=true` disables authentication. Never enable it on a network-reachable deployment. Demo data is inserted only when the database has no projects.
 
-In normal mode, a new instance opens with name-only owner onboarding and passkey enrollment. The owner can create Admin or Member identities from the Access panel and share one-time passkey setup links. Configure the deployment's stable WebAuthn hostname and HTTPS origin before enrollment; see [`docs/auth.md`](docs/auth.md).
-
-See [`docs/README.md`](docs/README.md) for the deployment-mode contract, persistence details, seeded-data invariants, modal behavior, and future-task verification checklist.
-
-Open:
-
-- Web app: `http://localhost:3000`
-- API health: `http://localhost:8000/health`
-- Interactive API reference: `http://localhost:8000/docs`
-
-Keyword retrieval is enabled in the default Compose stack. Native deployments can enable semantic embeddings with `RUNTRACE_EMBEDDINGS_ENABLED=true`.
-
-To clear all database, artifact, and model volumes:
+To deliberately erase the Compose volumes and recreate the demo:
 
 ```bash
-docker compose down -v
+./scripts/reset-demo.sh
 ```
+
+This command is destructive. For ordinary shutdowns, use `docker compose down` without `-v`.
 
 ## Native development
 
-Native API development expects PostgreSQL with the `vector` extension. Copy `.env.example`, adjust the database URL, then run:
+Native API development requires Python 3.11 or newer and PostgreSQL with the `vector` extension. Copy `.env.example` to `.env`, review its values, and run:
 
 ```bash
 UV_CACHE_DIR=.uv-cache uv sync --extra dev
@@ -72,14 +70,15 @@ UV_CACHE_DIR=.uv-cache uv run uvicorn runtrace_api.main:app --reload --port 8000
 In a second terminal:
 
 ```bash
-cd apps/web
-npm install
-npm run dev
+npm --prefix apps/web ci
+npm --prefix apps/web run dev
 ```
 
 The Next.js server proxies `/api/*` to `INTERNAL_API_URL`, which defaults to `http://localhost:8000`.
 
-## Agent closed loop
+## Agent clients
+
+In development mode, the CLI can retrieve context, search evidence, and track a command:
 
 ```bash
 runtrace context <project-slug>
@@ -95,6 +94,27 @@ Run the MCP server over stdio:
 RUNTRACE_BASE_URL=http://localhost:8000 runtrace-mcp
 ```
 
+Authentication boundary: the current browser application supports passkey sessions, but the Python SDK, CLI, and MCP server do not yet support a non-interactive production credential. They work with `RUNTRACE_DEV=true`; do not expose that mode publicly. Treat authenticated remote agent access as not yet supported rather than bypassing the API behind an untrusted proxy.
+
+## Configuration
+
+`.env.example` documents native-development defaults. Important settings include:
+
+| Variable | Purpose |
+| --- | --- |
+| `RUNTRACE_DATABASE_URL` | SQLAlchemy database connection URL |
+| `RUNTRACE_ARTIFACT_PATH` | Local artifact storage directory |
+| `RUNTRACE_CORS_ORIGINS` | Comma-separated browser origins |
+| `RUNTRACE_DEV` | Disable auth for trusted local development only |
+| `RUNTRACE_SEED_DEMO` | Seed an empty database with demo records |
+| `RUNTRACE_EMBEDDINGS_ENABLED` | Enable FastEmbed semantic indexing |
+| `RUNTRACE_WEBAUTHN_RP_ID` | Stable public hostname used by passkeys |
+| `RUNTRACE_WEBAUTHN_ORIGINS` | Comma-separated exact public HTTPS origins |
+| `RUNTRACE_MAX_ARTIFACT_SIZE` | Maximum upload size in bytes |
+| `RUNTRACE_CLAIM_TIMEOUT_SECONDS` | Age at which abandoned claims are requeued |
+
+Compose disables embeddings by default to keep the base deployment lightweight. See [the deployment guide](docs/README.md) and [authentication guide](docs/auth.md) before exposing an instance beyond localhost.
+
 ## Verification
 
 ```bash
@@ -102,6 +122,20 @@ UV_CACHE_DIR=.uv-cache uv run pytest
 npm --prefix apps/web run lint
 npm --prefix apps/web run build
 docker compose config
+RUNTRACE_DEV=true docker compose config
 ```
 
-The historical `prototype/` directory is retained only as the accepted design source. Docker and development commands use the production Next.js app in `apps/web/`.
+## Repository layout
+
+```text
+apps/api/            API service and database migrations
+apps/mcp/            MCP stdio server
+apps/web/            production web application
+docs/                deployment and authentication documentation
+examples/            small instrumentation examples
+packages/python_sdk/ Python SDK and CLI
+scripts/             maintenance and import helpers
+tests/               API, migration, SDK, CLI, and MCP tests
+```
+
+Runtime databases, artifacts, caches, dependency directories, build output, and local environment files are intentionally excluded from version control and Docker build contexts.
