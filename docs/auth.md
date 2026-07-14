@@ -1,6 +1,6 @@
 # Instance authentication
 
-RunTrace normal mode uses instance-scoped identities with a display name,
+RunTrace normal mode uses instance-scoped identities with a username,
 password, role, and status. It does not require an email address or external
 identity provider.
 
@@ -27,7 +27,7 @@ sessions.
 - `admin` can use the app and manage identities, roles, setup links, and suspension.
 - `member` can use projects and runs but cannot manage instance access.
 
-Admins create a name-only identity and receive a random one-time setup link.
+Admins create a username-only identity and receive a random one-time setup link.
 The recipient uses it to choose a password. The token is stored only as a
 SHA-256 digest, expires after 24 hours by default, and is invalidated after
 setup. Creating a replacement link invalidates the previous one. Suspending an

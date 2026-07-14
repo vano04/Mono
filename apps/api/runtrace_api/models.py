@@ -46,7 +46,7 @@ class Identity(Base):
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("identity"))
-    name: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     role: Mapped[str] = mapped_column(String(32), default="member", index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)

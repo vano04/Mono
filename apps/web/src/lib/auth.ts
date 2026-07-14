@@ -5,7 +5,7 @@ export type IdentityStatus = "active" | "pending" | "suspended"
 
 export interface AuthIdentity {
   id: string
-  name: string
+  username: string
   role: IdentityRole
   status: IdentityStatus
   password_set?: boolean
@@ -31,17 +31,17 @@ export interface AuthStatus {
 
 export const auth = {
   status: () => api<AuthStatus>("/api/v1/auth/status", { cache: "no-store" }),
-  bootstrap: (name: string, password: string) => api<{ identity: AuthIdentity }>("/api/v1/auth/bootstrap", {
+  bootstrap: (username: string, password: string) => api<{ identity: AuthIdentity }>("/api/v1/auth/bootstrap", {
     method: "POST",
-    body: JSON.stringify({ name, password }),
+    body: JSON.stringify({ username, password }),
   }),
   setup: (token: string, password: string) => api<{ identity: AuthIdentity }>("/api/v1/auth/setup", {
     method: "POST",
     body: JSON.stringify({ token, password }),
   }),
-  login: (name: string, password: string) => api<{ identity: AuthIdentity }>("/api/v1/auth/login", {
+  login: (username: string, password: string) => api<{ identity: AuthIdentity }>("/api/v1/auth/login", {
     method: "POST",
-    body: JSON.stringify({ name, password }),
+    body: JSON.stringify({ username, password }),
   }),
   changePassword: (currentPassword: string, newPassword: string) => api<{ identity: AuthIdentity }>("/api/v1/auth/password", {
     method: "POST",
@@ -49,7 +49,7 @@ export const auth = {
   }),
   logout: () => api<void>("/api/v1/auth/logout", { method: "POST" }),
   identities: () => api<AuthIdentity[]>("/api/v1/auth/identities", { cache: "no-store" }),
-  createIdentity: (body: { name: string; role: "admin" | "member" }) => api<{ identity: AuthIdentity; setup_token: string; setup_path: string }>("/api/v1/auth/identities", { method: "POST", body: JSON.stringify(body) }),
+  createIdentity: (body: { username: string; role: "admin" | "member" }) => api<{ identity: AuthIdentity; setup_token: string; setup_path: string }>("/api/v1/auth/identities", { method: "POST", body: JSON.stringify(body) }),
   updateIdentity: (id: string, body: { role?: "admin" | "member"; status?: "active" | "suspended" }) => api<AuthIdentity>(`/api/v1/auth/identities/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   setupLink: (id: string) => api<{ setup_token: string; setup_path: string }>(`/api/v1/auth/identities/${id}/setup-link`, { method: "POST" }),
   tokens: () => api<ApiToken[]>("/api/v1/auth/tokens", { cache: "no-store" }),

@@ -30,7 +30,7 @@ function readableError(error: unknown) {
 }
 
 function SetupScreen({ status, onComplete }: { status: AuthStatus; onComplete: () => Promise<void> }) {
-  const [name, setName] = useState("")
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirmation, setConfirmation] = useState("")
   const [busy, setBusy] = useState(false)
@@ -50,9 +50,9 @@ function SetupScreen({ status, onComplete }: { status: AuthStatus; onComplete: (
     }
     setBusy(true)
     try {
-      if (isBootstrap) await auth.bootstrap(name, password)
+      if (isBootstrap) await auth.bootstrap(username, password)
       else if (isInvite && setupToken) await auth.setup(setupToken, password)
-      else await auth.login(name, password)
+      else await auth.login(username, password)
       window.history.replaceState({}, "", window.location.pathname)
       await onComplete()
     } catch (error) {
@@ -88,12 +88,12 @@ function SetupScreen({ status, onComplete }: { status: AuthStatus; onComplete: (
 
           <section className="p-7 lg:p-10">
             <h2 className="text-xl font-semibold tracking-tight">{isInvite ? "Set your password" : isBootstrap ? "Secure this instance" : "Sign in to RunTrace"}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{isInvite ? "This setup link can only be used once." : isBootstrap ? "Create the owner identity and its password." : "Enter your identity name and password."}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{isInvite ? "This setup link can only be used once." : isBootstrap ? "Create the owner username and password." : "Enter your username and password."}</p>
             <form className="mt-7 space-y-5" onSubmit={(event) => { event.preventDefault(); void submit() }}>
-              {!isInvite ? <div className="space-y-2"><Label htmlFor="identity-name">Full name</Label><Input id="identity-name" autoComplete="username" value={name} onChange={(event) => setName(event.target.value)} placeholder="Your full name" required /></div> : null}
+              {!isInvite ? <div className="space-y-2"><Label htmlFor="username">Username</Label><Input id="username" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9][A-Za-z0-9._-]*" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="owner" autoCapitalize="none" spellCheck={false} required /><p className="text-xs text-muted-foreground">3–32 letters, numbers, dots, underscores, or hyphens.</p></div> : null}
               <div className="space-y-2"><Label htmlFor="password">Password</Label><Input id="password" type="password" autoComplete={isBootstrap || isInvite ? "new-password" : "current-password"} minLength={isBootstrap || isInvite ? 12 : undefined} value={password} onChange={(event) => setPassword(event.target.value)} required /></div>
               {isBootstrap || isInvite ? <div className="space-y-2"><Label htmlFor="password-confirmation">Confirm password</Label><Input id="password-confirmation" type="password" autoComplete="new-password" minLength={12} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required /></div> : null}
-              <Button size="lg" className="w-full" disabled={busy}>{busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <KeyRound data-icon="inline-start" />}<span>{busy ? "Please wait…" : isBootstrap ? "Create owner" : isInvite ? "Set password & continue" : "Sign in"}</span></Button>
+              <Button type="submit" size="lg" className="w-full" disabled={busy}>{busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <KeyRound data-icon="inline-start" />}<span>{busy ? "Please wait…" : isBootstrap ? "Create owner" : isInvite ? "Set password & continue" : "Sign in"}</span></Button>
             </form>
             <div className="mt-5 flex items-start justify-center gap-2 text-xs leading-5 text-muted-foreground"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" /><span>RunTrace stores a salted scrypt hash, never the password itself. On plain HTTP, use this only on a trusted LAN.</span></div>
           </section>

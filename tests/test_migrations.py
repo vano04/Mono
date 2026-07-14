@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from alembic import command
@@ -37,5 +38,30 @@ def test_existing_native_database_is_upgraded_to_current_schema(monkeypatch, tmp
     assert "search_documents" in tables
     assert "tag_definitions" in tables
     assert {"identities", "passkey_credentials", "auth_sessions", "auth_ceremonies", "api_tokens"}.issubset(tables)
-    assert "password_hash" in identity_columns
-    assert revision == "0007_password_auth"
+    assert {"password_hash", "username"}.issubset(identity_columns)
+    assert "name" not in identity_columns
+    assert revision == "0008_identity_usernames"
+
+
+def test_identity_names_are_migrated_to_unique_usernames(monkeypatch, tmp_path):
+    database = tmp_path / "identity-migration.db"
+    monkeypatch.setattr(settings, "database_url", f"sqlite:///{database}")
+    migration_config = Config(str(ROOT / "alembic.ini"))
+    command.upgrade(migration_config, "0007_password_auth")
+
+    now = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE identities RENAME COLUMN username TO name")
+        connection.execute(
+            "INSERT INTO identities (id, name, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ("identity_1", "Ada Lovelace", "owner", "active", now, now),
+        )
+        connection.execute(
+            "INSERT INTO identities (id, name, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ("identity_2", "ada-lovelace", "member", "active", now, now),
+        )
+
+    command.upgrade(migration_config, "head")
+    with sqlite3.connect(database) as connection:
+        usernames = {row[0] for row in connection.execute("SELECT username FROM identities")}
+    assert usernames == {"ada-lovelace", "ada-lovelace-2"}

@@ -25,7 +25,7 @@ def test_normal_mode_requires_bootstrap_then_a_session(fresh_database, monkeypat
     assert blocked.status_code == 428
 
     with SessionLocal() as session:
-        session.add(Identity(name="Owner", role="owner", status="active"))
+        session.add(Identity(username="owner", role="owner", status="active"))
         session.commit()
 
     assert fresh_database.get("/api/v1/projects").status_code == 401
@@ -34,7 +34,7 @@ def test_normal_mode_requires_bootstrap_then_a_session(fresh_database, monkeypat
 def test_owner_bootstrap_and_password_login(fresh_database, monkeypatch):
     monkeypatch.setattr(settings, "dev", False)
     created = fresh_database.post("/api/v1/auth/bootstrap", json={
-        "name": "Owner",
+        "username": "owner",
         "password": "correct horse battery staple",
     })
     assert created.status_code == 201
@@ -42,14 +42,14 @@ def test_owner_bootstrap_and_password_login(fresh_database, monkeypatch):
     assert fresh_database.get("/api/v1/projects").status_code == 200
 
     with SessionLocal() as session:
-        owner = session.scalar(select(Identity).where(Identity.name == "Owner"))
+        owner = session.scalar(select(Identity).where(Identity.username == "owner"))
         assert owner is not None
         assert owner.password_hash != "correct horse battery staple"
 
     assert fresh_database.post("/api/v1/auth/logout").status_code == 204
-    assert fresh_database.post("/api/v1/auth/login", json={"name": "Owner", "password": "wrong password"}).status_code == 401
+    assert fresh_database.post("/api/v1/auth/login", json={"username": "owner", "password": "wrong password"}).status_code == 401
     signed_in = fresh_database.post("/api/v1/auth/login", json={
-        "name": "owner",
+        "username": "OWNER",
         "password": "correct horse battery staple",
     })
     assert signed_in.status_code == 200
@@ -62,11 +62,11 @@ def test_owner_bootstrap_and_password_login(fresh_database, monkeypatch):
     assert changed.status_code == 200
     assert fresh_database.post("/api/v1/auth/logout").status_code == 204
     assert fresh_database.post("/api/v1/auth/login", json={
-        "name": "Owner",
+        "username": "owner",
         "password": "correct horse battery staple",
     }).status_code == 401
     assert fresh_database.post("/api/v1/auth/login", json={
-        "name": "Owner",
+        "username": "owner",
         "password": "an even better replacement password",
     }).status_code == 200
 
@@ -75,14 +75,14 @@ def test_owner_recovery_password_initializes_legacy_owner(fresh_database, monkey
     monkeypatch.setattr(settings, "dev", False)
     monkeypatch.setattr(settings, "owner_recovery_password", "temporary recovery password")
     with SessionLocal() as session:
-        owner = Identity(name="Owner", role="owner", status="active")
+        owner = Identity(username="owner", role="owner", status="active")
         session.add(owner)
         session.commit()
         apply_owner_recovery_password(session)
         assert owner.password_hash
 
     assert fresh_database.post("/api/v1/auth/login", json={
-        "name": "Owner",
+        "username": "owner",
         "password": "temporary recovery password",
     }).status_code == 200
 
@@ -91,7 +91,7 @@ def test_admin_can_create_identity_and_suspend_access(fresh_database, monkeypatc
     monkeypatch.setattr(settings, "dev", False)
     raw_token = "test-session-token"
     with SessionLocal() as session:
-        owner = Identity(name="Owner", role="owner", status="active")
+        owner = Identity(username="owner", role="owner", status="active")
         session.add(owner)
         session.flush()
         session.add(AuthSession(
@@ -104,7 +104,7 @@ def test_admin_can_create_identity_and_suspend_access(fresh_database, monkeypatc
     fresh_database.cookies.set("runtrace_session", raw_token)
 
     created = fresh_database.post("/api/v1/auth/identities", json={
-        "name": "Ada Lovelace",
+        "username": "ada",
         "role": "admin",
     })
     assert created.status_code == 201
@@ -128,14 +128,14 @@ def test_admin_can_create_identity_and_suspend_access(fresh_database, monkeypatc
     assert suspended.json()["status"] == "suspended"
 
     identities = fresh_database.get("/api/v1/auth/identities").json()
-    assert {item["name"] for item in identities} == {"Owner", "Ada Lovelace"}
+    assert {item["username"] for item in identities} == {"owner", "ada"}
 
 
 def test_owner_cannot_be_demoted_or_suspended(fresh_database, monkeypatch):
     monkeypatch.setattr(settings, "dev", False)
     raw_token = "owner-session-token"
     with SessionLocal() as session:
-        owner = Identity(name="Owner", role="owner", status="active")
+        owner = Identity(username="owner", role="owner", status="active")
         session.add(owner)
         session.flush()
         owner_id = owner.id
@@ -154,7 +154,7 @@ def test_api_token_authentication_and_revocation(fresh_database, monkeypatch):
     monkeypatch.setattr(settings, "dev", False)
     raw_session = "owner-session-token"
     with SessionLocal() as session:
-        owner = Identity(name="Owner", role="owner", status="active")
+        owner = Identity(username="owner", role="owner", status="active")
         session.add(owner)
         session.flush()
         session.add(AuthSession(

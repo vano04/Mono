@@ -32,14 +32,14 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 @dataclass(frozen=True)
 class AuthPrincipal:
     id: str
-    name: str
+    username: str
     role: str
     status: str
     dev: bool = False
 
 
 class BootstrapRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
+    username: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     password: str = Field(min_length=12, max_length=1024)
 
 
@@ -49,7 +49,7 @@ class SetupRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
+    username: str = Field(min_length=3, max_length=32)
     password: str = Field(min_length=1, max_length=1024)
 
 
@@ -59,7 +59,7 @@ class PasswordChangeRequest(BaseModel):
 
 
 class IdentityCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
+    username: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     role: Literal["admin", "member"] = "member"
 
 
@@ -102,9 +102,9 @@ def _password_matches(password: str, encoded: str) -> bool:
 _DUMMY_PASSWORD_HASH = _password_hash(secrets.token_urlsafe(24))
 
 
-def _login_key(request: Request, name: str) -> str:
+def _login_key(request: Request, username: str) -> str:
     host = request.client.host if request.client else "unknown"
-    return f"{host}:{name.strip().lower()}"
+    return f"{host}:{username.strip().lower()}"
 
 
 def _check_login_limit(key: str) -> None:
@@ -147,7 +147,7 @@ def _aware(value: datetime) -> datetime:
 def _identity_payload(identity: Identity) -> dict[str, Any]:
     return {
         "id": identity.id,
-        "name": identity.name,
+        "username": identity.username,
         "role": identity.role,
         "status": identity.status,
         "last_active_at": identity.last_active_at,
@@ -227,7 +227,7 @@ async def authenticate_request(request: Request, call_next):
                 and (api_token.expires_at is None or _aware(api_token.expires_at) > now_utc())
             ):
                 identity = api_token.identity
-                request.state.identity = AuthPrincipal(identity.id, identity.name, identity.role, identity.status)
+                request.state.identity = AuthPrincipal(identity.id, identity.username, identity.role, identity.status)
                 if not api_token.last_used_at or now_utc() - _aware(api_token.last_used_at) > timedelta(minutes=5):
                     api_token.last_used_at = now_utc()
                     identity.last_active_at = now_utc()
@@ -240,7 +240,7 @@ async def authenticate_request(request: Request, call_next):
             )
             if auth_session and _aware(auth_session.expires_at) > now_utc() and auth_session.identity.status == "active":
                 identity = auth_session.identity
-                request.state.identity = AuthPrincipal(identity.id, identity.name, identity.role, identity.status)
+                request.state.identity = AuthPrincipal(identity.id, identity.username, identity.role, identity.status)
                 if not identity.last_active_at or now_utc() - _aware(identity.last_active_at) > timedelta(minutes=5):
                     identity.last_active_at = now_utc()
                     session.commit()
@@ -268,7 +268,7 @@ def auth_status(request: Request, session: Session = Depends(get_db)) -> dict[st
         "authenticated": bool(principal),
         "identity": None if not principal else {
             "id": principal.id,
-            "name": principal.name,
+            "username": principal.username,
             "role": principal.role,
             "status": principal.status,
             "password_set": True if principal.dev else bool(identity and identity.password_hash),
@@ -282,10 +282,10 @@ def bootstrap(body: BootstrapRequest, response: Response, session: Session = Dep
         raise HTTPException(409, "Authentication is disabled in development mode")
     if session.scalar(select(func.count()).select_from(Identity)):
         raise HTTPException(409, "This instance already has an owner")
-    name = body.name.strip()
+    username = body.username.strip().lower()
     identity = Identity(
         id=f"identity_{secrets.token_hex(16)}",
-        name=name,
+        username=username,
         role="owner",
         status="active",
         password_hash=_password_hash(body.password),
@@ -316,9 +316,9 @@ def setup(body: SetupRequest, response: Response, session: Session = Depends(get
 
 @router.post("/login")
 def login(body: LoginRequest, request: Request, response: Response, session: Session = Depends(get_db)) -> dict[str, Any]:
-    login_key = _login_key(request, body.name)
+    login_key = _login_key(request, body.username)
     _check_login_limit(login_key)
-    identity = session.scalar(select(Identity).where(func.lower(Identity.name) == body.name.strip().lower()))
+    identity = session.scalar(select(Identity).where(Identity.username == body.username.strip().lower()))
     encoded = identity.password_hash if identity and identity.password_hash else _DUMMY_PASSWORD_HASH
     valid = _password_matches(body.password, encoded)
     if not identity or not valid or identity.status != "active":
@@ -420,10 +420,10 @@ def create_identity(
     session: Session = Depends(get_db),
     _: AuthPrincipal = Depends(_admin),
 ) -> dict[str, Any]:
-    name = body.name.strip()
-    if session.scalar(select(Identity.id).where(func.lower(Identity.name) == name.lower())):
-        raise HTTPException(409, "An identity with this name already exists")
-    identity = Identity(name=name, role=body.role, status="pending")
+    username = body.username.strip().lower()
+    if session.scalar(select(Identity.id).where(Identity.username == username)):
+        raise HTTPException(409, "An identity with this username already exists")
+    identity = Identity(username=username, role=body.role, status="pending")
     session.add(identity)
     session.flush()
     setup_token = _refresh_setup_token(identity)
