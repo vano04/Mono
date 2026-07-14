@@ -1,5 +1,6 @@
 import json
 from contextlib import contextmanager
+from importlib.metadata import version as package_version
 
 from typer.testing import CliRunner
 
@@ -36,6 +37,13 @@ class FakeClient:
 
     def run(self, *_args, **_kwargs):
         return self.tracked
+
+
+def test_cli_version():
+    result = runner.invoke(cli.app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.stdout.strip() == f"runtrace {package_version('runtrace-ai')}"
 
 
 def test_cli_search_and_context_commands(monkeypatch):

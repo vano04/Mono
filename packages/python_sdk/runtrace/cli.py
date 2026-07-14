@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+from importlib.metadata import version as package_version
 from typing import Annotated
 
 import typer
@@ -16,6 +17,28 @@ from .credentials import resolve_connection, save_credentials
 app = typer.Typer(no_args_is_help=True, help="Track experiments and query RunTrace memory.")
 integrations_app = typer.Typer(no_args_is_help=True, help="Install RunTrace in supported agent CLIs.")
 app.add_typer(integrations_app, name="integrations")
+
+
+def version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"runtrace {package_version('runtrace-ai')}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            "-V",
+            callback=version_callback,
+            is_eager=True,
+            help="Show the RunTrace version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Track experiments and query RunTrace memory."""
 
 
 def client(base_url: str | None, api_token: str | None) -> RunTrace:
