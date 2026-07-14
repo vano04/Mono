@@ -1,34 +1,34 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -gt 1 ]; then
-  echo "Usage: $0 [VERSION]" >&2
-  exit 2
-fi
+compose() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+  else
+    echo "Docker Compose is required." >&2
+    exit 1
+  fi
+}
 
-if ! command -v uv >/dev/null 2>&1; then
-  echo "uv is required. Install it from https://docs.astral.sh/uv/getting-started/installation/" >&2
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is required. Install Docker Desktop or Docker Engine with Compose support." >&2
   exit 1
 fi
 
-if [ "$#" -eq 1 ]; then
-  requirement="runtrace-ai==$1"
-else
-  requirement="runtrace-ai"
+if ! docker info >/dev/null 2>&1; then
+  echo "The Docker daemon is not running." >&2
+  exit 1
 fi
 
-echo "Installing $requirement from PyPI..."
-uv tool install --force "$requirement"
+echo "Building and starting RunTrace..."
+compose up -d --build --wait
 
-if command -v runtrace >/dev/null 2>&1; then
-  runtrace --version
-else
-  bin_dir=$(uv tool dir --bin)
-  if [ -x "$bin_dir/runtrace" ]; then
-    "$bin_dir/runtrace" --version
-    echo "Add $bin_dir to PATH to run 'runtrace' directly."
-  else
-    echo "RunTrace installed, but its executable could not be located." >&2
-    exit 1
-  fi
-fi
+echo "RunTrace is ready."
+compose ps
+echo "Web: http://localhost:3000"
+echo "API: http://localhost:8000"

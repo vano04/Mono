@@ -33,8 +33,10 @@ The repository contains the maintained FastAPI service, Next.js application, Pyt
 Requirements: Docker with Compose support. From the repository root:
 
 ```bash
-docker compose up --build
+./scripts/install.sh
 ```
+
+The install script builds the API and web images from the cloned source, starts PostgreSQL and the application services, and waits for their health checks. The equivalent Compose command is `docker compose up -d --build --wait`.
 
 Open <http://localhost:3000>. On a fresh database, the first browser creates the instance owner and a password. Data is stored in named PostgreSQL and artifact volumes and survives `docker compose down`.
 
@@ -104,14 +106,6 @@ You do not need to clone the repository on an agent or application host. Install
 ```bash
 uv tool install runtrace-ai
 ```
-
-From a repository checkout, the install helper installs or updates to the latest PyPI release and verifies the CLI:
-
-```bash
-./scripts/install.sh
-```
-
-Pass a version to install a specific release, for example `./scripts/install.sh 0.1.3`.
 
 For Python applications:
 
