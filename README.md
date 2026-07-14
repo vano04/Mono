@@ -180,3 +180,7 @@ tests/               API, migration, SDK, CLI, and MCP tests
 ```
 
 Runtime databases, artifacts, caches, dependency directories, build output, and local environment files are intentionally excluded from version control and Docker build contexts.
+
+## License
+
+RunTrace is licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). If you modify RunTrace and make it available to users over a network, you must offer those users the corresponding source code as required by the license.

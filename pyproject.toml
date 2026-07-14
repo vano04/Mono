@@ -3,12 +3,14 @@ name = "runtrace"
 version = "0.1.0"
 description = "Persistent experiment memory for autonomous research agents"
 readme = "README.md"
+license = "AGPL-3.0-only"
 requires-python = ">=3.11"
 keywords = ["agents", "experiments", "mcp", "research", "tracking"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Framework :: FastAPI",
+  "License :: OSI Approved :: GNU Affero General Public License v3",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
