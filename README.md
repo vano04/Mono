@@ -43,7 +43,7 @@ To deploy the published GitHub Container packages instead of building locally:
 docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
 ```
 
-The images are `ghcr.io/vano04/runtrace:0.1.0` for the API/CLI/MCP runtime and `ghcr.io/vano04/runtrace-web:0.1.0` for the dashboard. Set `RUNTRACE_VERSION` to select another release.
+The images are `ghcr.io/vano04/runtrace:0.1.1` for the API/CLI/MCP runtime and `ghcr.io/vano04/runtrace-web:0.1.1` for the dashboard. Set `RUNTRACE_VERSION` to select another release.
 
 Useful endpoints:
 
@@ -91,13 +91,13 @@ Open <http://localhost:3000>. The server proxies `/api/*` to
 You do not need to clone the repository on an agent or application host. Install the lightweight CLI directly from GitHub:
 
 ```bash
-uv tool install 'runtrace @ git+https://github.com/vano04/RunTrace.git@v0.1.0'
+uv tool install 'runtrace @ git+https://github.com/vano04/RunTrace.git@v0.1.1'
 ```
 
 For Python applications:
 
 ```bash
-python -m pip install 'runtrace @ git+https://github.com/vano04/RunTrace.git@v0.1.0'
+python -m pip install 'runtrace @ git+https://github.com/vano04/RunTrace.git@v0.1.1'
 ```
 
 In normal mode, create a token at **Access → Your agent tokens**, then authenticate the CLI and installed MCP plugin:
@@ -119,7 +119,7 @@ runtrace exec --project <project-slug> --name "new variation" \
 Run the MCP server over stdio without a persistent install:
 
 ```bash
-uvx --from 'runtrace[mcp] @ git+https://github.com/vano04/RunTrace.git@v0.1.0' runtrace-mcp
+uvx --from 'runtrace[mcp] @ git+https://github.com/vano04/RunTrace.git@v0.1.1' runtrace-mcp
 ```
 
 ## Codex and Claude Code plugins
