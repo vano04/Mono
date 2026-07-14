@@ -15,6 +15,7 @@ from alembic.config import Config
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy import and_, delete, desc, func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
@@ -36,6 +37,7 @@ from .models import (
     RunMetric,
     RunParameter,
     TagDefinition,
+    Visualization,
     WorkerObservation,
     now_utc,
 )
@@ -60,7 +62,11 @@ from .schemas import (
     RunRead,
     SearchRequest,
     TagWrite,
+    VisualizationCreate,
+    VisualizationImport,
+    VisualizationUpdate,
 )
+from .rtvis import RTVisSpec, normalized_spec, visualization_guide
 from .seed import seed_demo
 
 
@@ -400,6 +406,113 @@ def run_payload(run: Run, detail: bool = False) -> dict:
     return payload
 
 
+def get_visualization(session: Session, project: Project, identifier: str) -> Visualization:
+    item = session.scalar(select(Visualization).where(Visualization.project_id == project.id, Visualization.id == identifier))
+    if not item:
+        raise HTTPException(404, "Visualization not found")
+    return item
+
+
+def resolve_visualization_datasets(session: Session, project: Project, spec: dict) -> dict[str, list[dict]]:
+    resolved: dict[str, list[dict]] = {}
+    for name, dataset in spec.get("datasets", {}).items():
+        if dataset.get("source") == "inline":
+            resolved[name] = dataset.get("rows", [])
+            continue
+        filters = dataset.get("filters") or {}
+        requested_limit = filters.get("limit", 250)
+        limit = min(max(requested_limit if isinstance(requested_limit, int) and not isinstance(requested_limit, bool) else 250, 1), 1_000)
+        include_tags = _normalise_tags(filters.get("include_tags"))
+        exclude_tags = _normalise_tags(filters.get("exclude_tags"))
+        if dataset.get("query") == "runs":
+            runs = session.scalars(
+                select(Run)
+                .options(selectinload(Run.metrics), selectinload(Run.parameters), selectinload(Run.project).selectinload(Project.tag_definitions))
+                .where(Run.project_id == project.id, Run.deleted_at.is_(None))
+                .order_by(desc(Run.created_at))
+            ).all()
+            rows = []
+            for run in runs:
+                tags = run_tags(run)
+                if filters.get("lifecycle") and run.lifecycle != filters["lifecycle"]:
+                    continue
+                if filters.get("disposition") and run.disposition != filters["disposition"]:
+                    continue
+                if not matches_tag_filters(tags, include_tags, exclude_tags):
+                    continue
+                summary = metric_summary(run)
+                row = {
+                    "id": run.id,
+                    "display_id": run.display_id,
+                    "name": run.name,
+                    "lifecycle": run.lifecycle,
+                    "disposition": run.disposition,
+                    "started_at": run.started_at.isoformat(),
+                    "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                    "git_branch": run.git_branch,
+                    "tags": tags,
+                    "metrics": {key: value["latest"] for key, value in summary.items()},
+                }
+                for key, value in summary.items():
+                    if key not in row:
+                        row[key] = value["latest"]
+                rows.append(row)
+                if len(rows) >= limit:
+                    break
+            resolved[name] = rows
+        elif dataset.get("query") == "experiments":
+            experiments = session.scalars(
+                select(Experiment)
+                .where(Experiment.project_id == project.id, Experiment.deleted_at.is_(None))
+                .order_by(desc(Experiment.created_at))
+            ).all()
+            rows = []
+            for experiment in experiments:
+                tags = experiment_tags(experiment)
+                if filters.get("lifecycle") and experiment.lifecycle != filters["lifecycle"]:
+                    continue
+                if filters.get("disposition") and experiment.disposition != filters["disposition"]:
+                    continue
+                if not matches_tag_filters(tags, include_tags, exclude_tags):
+                    continue
+                rows.append({
+                    "id": experiment.id,
+                    "display_id": experiment.display_id,
+                    "title": experiment.title,
+                    "hypothesis": experiment.hypothesis,
+                    "lifecycle": experiment.lifecycle,
+                    "disposition": experiment.disposition,
+                    "priority": experiment.priority,
+                    "created_at": experiment.created_at.isoformat(),
+                    "tags": tags,
+                })
+                if len(rows) >= limit:
+                    break
+            resolved[name] = rows
+    return resolved
+
+
+def visualization_payload(session: Session, project: Project, item: Visualization, resolve: bool = True) -> dict:
+    payload = {
+        "id": item.id,
+        "project_id": item.project_id,
+        "name": item.name,
+        "description": item.description,
+        "spec_version": item.spec_version,
+        "spec": item.spec,
+        "visible": item.visible,
+        "sort_order": item.sort_order,
+        "revision": item.revision,
+        "source_run_id": item.source_run_id,
+        "created_by": item.created_by,
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
+    }
+    if resolve:
+        payload["resolved_datasets"] = resolve_visualization_datasets(session, project, item.spec)
+    return payload
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "runtrace-api"}
@@ -505,6 +618,147 @@ def update_project_settings(project: str, body: ProgressSettingsUpdate, session:
     audit(session, current.id, "project.progress_metric_updated", "project", current.id, "human", None, {"metric_name": metric_name, "direction": body.direction})
     session.commit()
     return {"metric_name": metric_name, "direction": body.direction, "available_metrics": available_metric_names(session, current.id)}
+
+
+@app.get("/api/v1/projects/{project}/visualizations/guide")
+def get_visualization_guide(project: str, session: Session = Depends(get_db)) -> dict:
+    get_project(session, project)
+    return visualization_guide()
+
+
+@app.post("/api/v1/projects/{project}/visualizations/preview")
+def preview_visualization(project: str, spec: RTVisSpec, session: Session = Depends(get_db)) -> dict:
+    current = get_project(session, project)
+    document = normalized_spec(spec)
+    return {"valid": True, "spec": document, "resolved_datasets": resolve_visualization_datasets(session, current, document)}
+
+
+@app.get("/api/v1/projects/{project}/visualizations")
+def list_visualizations(project: str, session: Session = Depends(get_db)) -> list[dict]:
+    current = get_project(session, project)
+    items = session.scalars(
+        select(Visualization).where(Visualization.project_id == current.id).order_by(Visualization.sort_order, Visualization.created_at)
+    ).all()
+    return [visualization_payload(session, current, item) for item in items]
+
+
+@app.post("/api/v1/projects/{project}/visualizations", status_code=201)
+def create_visualization(project: str, body: VisualizationCreate, session: Session = Depends(get_db)) -> dict:
+    current = get_project(session, project)
+    name = body.name.strip()
+    if session.scalar(select(Visualization.id).where(Visualization.project_id == current.id, Visualization.name == name)):
+        raise HTTPException(409, "A visualization with this name already exists")
+    if body.source_run_id:
+        source_run = get_run(session, body.source_run_id)
+        if source_run.project_id != current.id:
+            raise HTTPException(409, "Source run must belong to this project")
+    item = Visualization(
+        project_id=current.id,
+        name=name,
+        description=body.description.strip(),
+        spec_version=body.spec.version,
+        spec=normalized_spec(body.spec),
+        visible=body.visible,
+        sort_order=body.sort_order,
+        source_run_id=body.source_run_id,
+        created_by=body.created_by.strip(),
+    )
+    session.add(item)
+    session.flush()
+    audit(session, current.id, "visualization.created", "visualization", item.id, body.created_by, None, {"name": item.name, "spec_version": item.spec_version})
+    session.commit()
+    session.refresh(item)
+    return visualization_payload(session, current, item)
+
+
+@app.get("/api/v1/projects/{project}/visualizations/{visualization_id}")
+def read_visualization(project: str, visualization_id: str, session: Session = Depends(get_db)) -> dict:
+    current = get_project(session, project)
+    return visualization_payload(session, current, get_visualization(session, current, visualization_id))
+
+
+@app.patch("/api/v1/projects/{project}/visualizations/{visualization_id}")
+def update_visualization(project: str, visualization_id: str, body: VisualizationUpdate, session: Session = Depends(get_db)) -> dict:
+    current = get_project(session, project)
+    item = get_visualization(session, current, visualization_id)
+    if body.name is not None:
+        name = body.name.strip()
+        duplicate = session.scalar(select(Visualization.id).where(Visualization.project_id == current.id, Visualization.name == name, Visualization.id != item.id))
+        if duplicate:
+            raise HTTPException(409, "A visualization with this name already exists")
+        item.name = name
+    if body.description is not None:
+        item.description = body.description.strip()
+    if body.spec is not None:
+        item.spec = normalized_spec(body.spec)
+        item.spec_version = body.spec.version
+    if body.visible is not None:
+        item.visible = body.visible
+    if body.sort_order is not None:
+        item.sort_order = body.sort_order
+    if "source_run_id" in body.model_fields_set:
+        if body.source_run_id:
+            source_run = get_run(session, body.source_run_id)
+            if source_run.project_id != current.id:
+                raise HTTPException(409, "Source run must belong to this project")
+        item.source_run_id = body.source_run_id
+    item.revision += 1
+    audit(session, current.id, "visualization.updated", "visualization", item.id, "human", None, {"name": item.name, "revision": item.revision})
+    session.commit()
+    session.refresh(item)
+    return visualization_payload(session, current, item)
+
+
+@app.delete("/api/v1/projects/{project}/visualizations/{visualization_id}", status_code=204)
+def delete_visualization(project: str, visualization_id: str, session: Session = Depends(get_db)) -> None:
+    current = get_project(session, project)
+    item = get_visualization(session, current, visualization_id)
+    audit(session, current.id, "visualization.deleted", "visualization", item.id, "human", None, {"name": item.name})
+    session.delete(item)
+    session.commit()
+
+
+@app.get("/api/v1/projects/{project}/visualizations/{visualization_id}/export")
+def export_visualization(project: str, visualization_id: str, session: Session = Depends(get_db)) -> dict:
+    current = get_project(session, project)
+    item = get_visualization(session, current, visualization_id)
+    return {
+        "format": "runtrace-visualization",
+        "version": 1,
+        "visualization": {"name": item.name, "description": item.description, "spec": item.spec},
+    }
+
+
+@app.post("/api/v1/projects/{project}/visualizations/import", status_code=201)
+def import_visualization(project: str, body: VisualizationImport, session: Session = Depends(get_db)) -> dict:
+    current = get_project(session, project)
+    document = body.document
+    if document.get("format") != "runtrace-visualization" or document.get("version") != 1 or not isinstance(document.get("visualization"), dict):
+        raise HTTPException(422, "Unsupported RunTrace visualization document")
+    portable = document["visualization"]
+    try:
+        spec = RTVisSpec.model_validate(portable.get("spec"))
+    except ValidationError as exc:
+        raise HTTPException(422, {"message": "Invalid RTVis specification", "errors": exc.errors(include_url=False)}) from exc
+    portable_name = portable.get("name") if isinstance(portable.get("name"), str) else ""
+    portable_description = portable.get("description") if isinstance(portable.get("description"), str) else ""
+    name = (body.name or portable_name or spec.title).strip()
+    if session.scalar(select(Visualization.id).where(Visualization.project_id == current.id, Visualization.name == name)):
+        raise HTTPException(409, "A visualization with this name already exists")
+    item = Visualization(
+        project_id=current.id,
+        name=name,
+        description=(portable_description or spec.description).strip(),
+        spec_version=spec.version,
+        spec=normalized_spec(spec),
+        created_by=body.created_by.strip(),
+    )
+    session.add(item)
+    session.flush()
+    audit(session, current.id, "visualization.imported", "visualization", item.id, body.created_by, None, {"name": item.name, "spec_version": item.spec_version})
+    session.commit()
+    session.refresh(item)
+    return visualization_payload(session, current, item)
 
 
 @app.get("/api/v1/projects/{project}/tags")
@@ -1140,6 +1394,9 @@ def dashboard(project: str, session: Session = Depends(get_db)) -> dict:
     register_tags(session, current, [tag for item in experiments for tag in experiment_tags(item)] + [tag for item in runs for tag in _normalise_tags((item.configuration or {}).get("tags"))])
     session.commit()
     all_tags = sorted({item.name for item in current.tag_definitions})
+    visualizations = session.scalars(
+        select(Visualization).where(Visualization.project_id == current.id).order_by(Visualization.sort_order, Visualization.created_at)
+    ).all()
     return {
         "project": ProjectRead.model_validate(current).model_dump(),
         "experiments": [ExperimentRead.model_validate(item).model_dump() for item in active_experiments],
@@ -1154,6 +1411,7 @@ def dashboard(project: str, session: Session = Depends(get_db)) -> dict:
         "available_metrics": available_metric_names(session, current.id),
         "available_tags": all_tags,
         "tag_definitions": [tag_payload(item) for item in sorted(current.tag_definitions, key=lambda item: item.name)],
+        "visualizations": [visualization_payload(session, current, item) for item in visualizations],
     }
 
 

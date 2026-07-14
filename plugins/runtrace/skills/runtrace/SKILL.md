@@ -15,6 +15,17 @@ Use RunTrace to make experimental work evidence-driven and recoverable across ag
 4. Log primary and diagnostic metrics with stable names. Log meaningful checkpoints and failures as events.
 5. Finish every started run. Record the disposition, concise result summary, and a reusable conclusion. A failed result is useful evidence and must not be hidden.
 
+## Custom visualizations
+
+When the user asks to generate, save, import, or revise a project visualization:
+
+1. Call `get_visualization_guide` for the target project before authoring JSON. The returned schema is authoritative for that RunTrace version.
+2. Prefer shadcn-backed layout, card, table, badge, and metric nodes. Use chart nodes for marks that shadcn does not directly provide; RunTrace applies its semantic theme automatically.
+3. Put user-supplied tabular data in an `inline` dataset. Use a `runtrace` dataset with a supported query when the widget should stay live as project records change.
+4. Call `preview_visualization` when the specification is complex or generated from ambiguous data. Fix validation errors before saving.
+5. Call `generate_visualization` to save the validated specification. Prefer the trusted ShadCN-backed nodes. When they cannot express the requested interaction, use a `javascript` node with separate `markup`, `styles`, and `script` fields; it runs in an isolated, network-disabled iframe and receives `window.runtrace.datasets` and `window.runtrace.theme`. Never include remote URLs or credentials.
+6. Use `export_visualization` and `import_visualization` for portable project-to-project transfer. Preserve the versioned document wrapper instead of copying only the inner spec.
+
 ## Guardrails
 
 - Never invent project slugs, run IDs, metrics, or results. Retrieve them or ask the user.

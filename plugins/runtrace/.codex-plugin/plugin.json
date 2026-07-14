@@ -7,13 +7,13 @@
   },
   "homepage": "https://github.com/vano04/RunTrace",
   "repository": "https://github.com/vano04/RunTrace",
-  "keywords": ["experiments", "research", "agents", "mcp", "observability"],
+  "keywords": ["experiments", "research", "agents", "mcp", "observability", "visualization"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "RunTrace",
     "shortDescription": "Shared experiment memory for research agents",
-    "longDescription": "Connect Codex to a self-hosted RunTrace instance. Retrieve prior evidence before changing code, coordinate proposed experiments, and record metrics, outcomes, artifacts, and conclusions through the bundled MCP tools.",
+    "longDescription": "Connect Codex to a self-hosted RunTrace instance. Retrieve prior evidence, coordinate experiments, record outcomes, and generate safe project-scoped RTVis visualizations through the bundled MCP tools.",
     "developerName": "RunTrace contributors",
     "category": "Developer Tools",
     "capabilities": ["Read", "Write"],
@@ -23,7 +23,8 @@
     "defaultPrompt": [
       "Review prior RunTrace evidence before starting this experiment",
       "Record this experiment and its outcome in RunTrace",
-      "Find related failed or successful runs in RunTrace"
+      "Find related failed or successful runs in RunTrace",
+      "Generate a visualization for this data in RunTrace"
     ],
     "brandColor": "#22C55E"
   }

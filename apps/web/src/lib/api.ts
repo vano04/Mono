@@ -1,4 +1,4 @@
-import type { Dashboard, Experiment, ProgressData, Project, Run, SearchResult, TagDefinition } from "@/lib/types"
+import type { Dashboard, Experiment, ProgressData, Project, RTVisSpec, Run, SearchResult, TagDefinition, Visualization, VisualizationDocument } from "@/lib/types"
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -75,4 +75,16 @@ export const runtrace = {
   createTag: (slug: string, name: string) => api<TagDefinition>(`/api/v1/projects/${slug}/tags`, { method: "POST", body: JSON.stringify({ name }) }),
   updateTag: (slug: string, id: string, name: string) => api<TagDefinition>(`/api/v1/projects/${slug}/tags/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
   deleteTag: (slug: string, id: string) => api<void>(`/api/v1/projects/${slug}/tags/${id}`, { method: "DELETE" }),
+  visualizationGuide: (slug: string) => api<Record<string, unknown>>(`/api/v1/projects/${slug}/visualizations/guide`),
+  visualizations: (slug: string) => api<Visualization[]>(`/api/v1/projects/${slug}/visualizations`),
+  createVisualization: (slug: string, body: { name: string; description?: string; spec: RTVisSpec }) =>
+    api<Visualization>(`/api/v1/projects/${slug}/visualizations`, { method: "POST", body: JSON.stringify(body) }),
+  updateVisualization: (slug: string, id: string, body: { name?: string; description?: string; spec?: RTVisSpec; visible?: boolean; sort_order?: number }) =>
+    api<Visualization>(`/api/v1/projects/${slug}/visualizations/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteVisualization: (slug: string, id: string) => api<void>(`/api/v1/projects/${slug}/visualizations/${id}`, { method: "DELETE" }),
+  exportVisualization: (slug: string, id: string) => api<VisualizationDocument>(`/api/v1/projects/${slug}/visualizations/${id}/export`),
+  importVisualization: (slug: string, document: VisualizationDocument, name?: string) => api<Visualization>(`/api/v1/projects/${slug}/visualizations/import`, {
+    method: "POST",
+    body: JSON.stringify({ document, ...(name ? { name } : {}) }),
+  }),
 }

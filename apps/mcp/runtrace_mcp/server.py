@@ -61,6 +61,67 @@ def delete_tag(project: str, tag_id: str) -> None:
 
 
 @mcp.tool()
+def get_visualization_guide(project: str) -> dict[str, Any]:
+    """Return the RTVis JSON schema, supported components, chart types, data sources, and RunTrace styling rules."""
+    return request("GET", f"/api/v1/projects/{project}/visualizations/guide")
+
+
+@mcp.tool()
+def list_visualizations(project: str) -> list[dict[str, Any]]:
+    """List custom visualizations saved to a project."""
+    return request("GET", f"/api/v1/projects/{project}/visualizations")
+
+
+@mcp.tool()
+def get_visualization(project: str, visualization_id: str) -> dict[str, Any]:
+    """Retrieve one saved visualization and its resolved project data."""
+    return request("GET", f"/api/v1/projects/{project}/visualizations/{visualization_id}")
+
+
+@mcp.tool()
+def preview_visualization(project: str, spec: dict[str, Any]) -> dict[str, Any]:
+    """Validate and resolve an RTVis specification without saving it."""
+    return request("POST", f"/api/v1/projects/{project}/visualizations/preview", spec)
+
+
+@mcp.tool()
+def generate_visualization(project: str, name: str, spec: dict[str, Any], description: str = "", source_run_id: str | None = None) -> dict[str, Any]:
+    """Validate and save an RTVis visualization authored by the host model for the supplied data or project query."""
+    payload: dict[str, Any] = {"name": name, "description": description, "spec": spec, "created_by": "agent"}
+    if source_run_id:
+        payload["source_run_id"] = source_run_id
+    return request("POST", f"/api/v1/projects/{project}/visualizations", payload)
+
+
+@mcp.tool()
+def update_visualization(project: str, visualization_id: str, spec: dict[str, Any] | None = None, name: str | None = None, description: str | None = None, visible: bool | None = None, sort_order: int | None = None) -> dict[str, Any]:
+    """Update the content, presentation, or placement of a saved visualization."""
+    payload = {key: value for key, value in {"spec": spec, "name": name, "description": description, "visible": visible, "sort_order": sort_order}.items() if value is not None}
+    return request("PATCH", f"/api/v1/projects/{project}/visualizations/{visualization_id}", payload)
+
+
+@mcp.tool()
+def delete_visualization(project: str, visualization_id: str) -> None:
+    """Delete a project visualization."""
+    return request("DELETE", f"/api/v1/projects/{project}/visualizations/{visualization_id}")
+
+
+@mcp.tool()
+def export_visualization(project: str, visualization_id: str) -> dict[str, Any]:
+    """Export a portable versioned RunTrace visualization document."""
+    return request("GET", f"/api/v1/projects/{project}/visualizations/{visualization_id}/export")
+
+
+@mcp.tool()
+def import_visualization(project: str, document: dict[str, Any], name: str | None = None) -> dict[str, Any]:
+    """Validate and import a portable RunTrace visualization document into a project."""
+    payload: dict[str, Any] = {"document": document, "created_by": "agent"}
+    if name:
+        payload["name"] = name
+    return request("POST", f"/api/v1/projects/{project}/visualizations/import", payload)
+
+
+@mcp.tool()
 def get_run(run_id: str) -> dict[str, Any]:
     """Retrieve a complete run, including metrics, events, parameters, and artifacts."""
     return request("GET", f"/api/v1/runs/{run_id}")

@@ -15,6 +15,7 @@ The repository contains the maintained FastAPI service, Next.js application, Pyt
 - keyword search, with optional pgvector semantic retrieval;
 - browser password authentication for a self-hosted instance;
 - revocable, expiring agent tokens for headless clients;
+- project-scoped, MCP-generated RTVis widgets with ShadCN theming, sandboxed JavaScript, and portable JSON import and export;
 - HTTP, Python, CLI, and MCP interfaces.
 
 ## Architecture

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { CreateExperimentDialog } from "@/components/create-experiment-dialog"
 import { ProgressChart } from "@/components/progress-chart"
+import { ProjectVisualizationWidgets, VisualizationSettings } from "@/components/project-visualizations"
 import { ProjectShell } from "@/components/project-shell"
 import { ProjectAccessCard } from "@/components/project-access-card"
 import { RecordActions } from "@/components/record-actions"
@@ -87,6 +88,8 @@ function DashboardView({ data, progress, slug, reload, setProgress, openRecord, 
       </CardHeader>
       <CardContent className="p-4 sm:p-6"><ProgressChart data={progress} /></CardContent>
     </Card>
+
+    <ProjectVisualizationWidgets visualizations={data.visualizations} />
 
     <Card className="mb-8 py-0">
       <CardContent className="grid p-0 sm:grid-cols-[1.4fr_.65fr_.65fr_auto]">
@@ -211,6 +214,7 @@ function SettingsView({ data, slug, reload }: { data: Dashboard; slug: string; r
         <div className="divide-y rounded-lg border">{data.tag_definitions.map((tag) => <div key={tag.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center"><div className="w-full sm:w-72"><Input value={tagNames[tag.id] ?? tag.name} onChange={(event) => setTagNames((current) => ({ ...current, [tag.id]: event.target.value }))} aria-label={`Tag name ${tag.name}`} /><p className="mt-1 text-xs text-muted-foreground">{tag.rule_key ? "Automatically assigned from autoresearch run data" : "Registered tag"}</p></div><div className="flex gap-2 sm:ml-auto"><Button type="button" size="sm" variant="outline" disabled={tagPending === tag.id || !tagNames[tag.id]?.trim() || tagNames[tag.id]?.trim() === tag.name} onClick={() => renameTag(tag.id)}><Save />Save</Button><Button type="button" size="icon-sm" variant="ghost" aria-label={`Delete ${tag.name}`} disabled={tagPending === tag.id} onClick={() => removeTag(tag.id, tag.name)}><Trash2 /></Button></div></div>)}</div>
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Agent bootstrap</CardTitle><CardDescription>Retrieve program.md, exclusions, baseline, metric definitions, proposals, and recent evidence in one call.</CardDescription></CardHeader><CardContent><div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3"><code className="min-w-0 flex-1 truncate text-xs">{bootstrap}</code><Button type="button" size="icon-sm" variant="ghost" aria-label="Copy bootstrap call" onClick={() => { navigator.clipboard.writeText(bootstrap); toast.success("Copied") }}><Copy /></Button></div><FieldDescription className="mt-3">Registry endpoint: {data.project.registry_endpoint}</FieldDescription></CardContent></Card>
+      <VisualizationSettings slug={slug} visualizations={data.visualizations} reload={reload} />
       <ProjectAccessCard project={slug} />
       <Card className="border-destructive/40"><CardHeader><CardTitle className="text-destructive">Delete project</CardTitle><CardDescription>Permanently removes this project, its proposals, runs, metrics, events, and uploaded artifacts.</CardDescription></CardHeader><CardContent><AlertDialog><AlertDialogTrigger render={<Button type="button" variant="destructive" />}>Delete {data.project.name}</AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {data.project.name}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. All experiment history and artifacts in this project will be permanently removed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" disabled={deleting} onClick={deleteProject}>{deleting ? "Deleting…" : "Delete project"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></CardContent></Card>
     </div>

@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .rtvis import RTVisSpec
+
 
 Lifecycle = Literal["proposed", "pending", "running", "completed", "crashed"]
 Disposition = Literal["kept", "discarded", "undecided"]
@@ -215,3 +217,28 @@ class SearchRequest(BaseModel):
     include_tags: list[str] = Field(default_factory=list)
     exclude_tags: list[str] = Field(default_factory=list)
     limit: int = Field(default=10, ge=1, le=100)
+
+
+class VisualizationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1_000)
+    spec: RTVisSpec
+    visible: bool = True
+    sort_order: int = Field(default=100, ge=0, le=10_000)
+    source_run_id: str | None = None
+    created_by: str = Field(default="agent", min_length=1, max_length=200)
+
+
+class VisualizationUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=1_000)
+    spec: RTVisSpec | None = None
+    visible: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0, le=10_000)
+    source_run_id: str | None = None
+
+
+class VisualizationImport(BaseModel):
+    document: dict[str, Any]
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    created_by: str = Field(default="agent", min_length=1, max_length=200)

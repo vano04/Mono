@@ -79,6 +79,18 @@ runtrace auth rt_runtrace_dev --base-url http://localhost:8000
 
 Or run `runtrace integrations install codex`, then run `runtrace auth`. The plugin launches MCP with `uvx`, so it needs no repository clone or persistent Python environment.
 
+### Generate project visualizations
+
+The plugin can author trusted, project-scoped RTVis widgets. Ask Codex:
+
+> Generate a visualization for this data and save it to the `my-project` RunTrace dashboard.
+
+Codex first calls `get_visualization_guide` to retrieve the exact schema supported by the connected server, then supplies a versioned JSON specification to `generate_visualization`. RunTrace prefers ShadCN-backed layout and data components plus theme-aware SVG chart marks. For interactions those nodes cannot express, RTVis also supports a portable JavaScript widget with separate markup, styles, script, data, and dimensions. Custom code runs in an isolated iframe with no same-origin or network access and receives the active RunTrace theme through `window.runtrace`.
+
+Saved visualizations are managed per project in Settings. Use **New** to configure one manually, or use a visualization's three-dot menu to edit, export, show or hide, and delete it. Exported `.rtvis.json` documents can be imported into another project.
+
+Use `export_visualization` to retrieve a versioned `runtrace-visualization` JSON document and `import_visualization` to install that document in another project. Inline datasets travel with the export; `runtrace` datasets resolve against records in the destination project.
+
 ## Claude Code plugin
 
 ```bash

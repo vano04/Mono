@@ -88,6 +88,77 @@ export interface Artifact {
   created_at?: string
 }
 
+export type RTVisNodeType = "stack" | "grid" | "card" | "metric" | "table" | "chart" | "badge" | "text" | "separator" | "javascript"
+export type RTVisChartType = "line" | "area" | "bar" | "scatter" | "heatmap"
+
+export interface RTVisColumn {
+  key: string
+  label: string
+  format: "text" | "number" | "date"
+}
+
+export interface RTVisNode {
+  type: RTVisNodeType
+  title?: string | null
+  description?: string | null
+  children?: RTVisNode[]
+  columns_count?: number
+  dataset?: string | null
+  columns?: RTVisColumn[]
+  chart?: RTVisChartType | null
+  x?: string | null
+  y?: string | null
+  series?: string | null
+  value?: string | number | null
+  label?: string | null
+  field?: string | null
+  aggregate?: "first" | "last" | "min" | "max" | "avg" | "sum" | "count"
+  content?: string | null
+  markup?: string | null
+  styles?: string | null
+  script?: string | null
+  height?: number
+}
+
+export interface RTVisDataset {
+  source: "inline" | "runtrace"
+  rows?: Array<Record<string, unknown>>
+  query?: "runs" | "experiments" | null
+  filters?: Record<string, unknown>
+}
+
+export interface RTVisSpec {
+  $schema: "https://runtrace.dev/schemas/rtvis/v1.json"
+  version: 1
+  title: string
+  description: string
+  datasets: Record<string, RTVisDataset>
+  view: RTVisNode
+}
+
+export interface Visualization {
+  id: string
+  project_id: string
+  name: string
+  description: string
+  spec_version: number
+  spec: RTVisSpec
+  visible: boolean
+  sort_order: number
+  revision: number
+  source_run_id: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+  resolved_datasets: Record<string, Array<Record<string, unknown>>>
+}
+
+export interface VisualizationDocument {
+  format: "runtrace-visualization"
+  version: 1
+  visualization: { name: string; description: string; spec: RTVisSpec }
+}
+
 export interface Dashboard {
   project: Project
   experiments: Experiment[]
@@ -102,6 +173,7 @@ export interface Dashboard {
   available_metrics: string[]
   available_tags: string[]
   tag_definitions: TagDefinition[]
+  visualizations: Visualization[]
 }
 
 export interface TagDefinition {
