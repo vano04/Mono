@@ -31,13 +31,38 @@ function statusLabel(status: IdentityStatus) {
   return status === "pending" ? "Pending setup" : status[0].toUpperCase() + status.slice(1)
 }
 
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value)
+      return
+    } catch {
+      // Fall back for embedded browsers that expose Clipboard but deny writes.
+    }
+  }
+
+  const textarea = document.createElement("textarea")
+  textarea.value = value
+  textarea.setAttribute("readonly", "")
+  textarea.style.position = "fixed"
+  textarea.style.opacity = "0"
+  document.body.appendChild(textarea)
+  textarea.select()
+
+  try {
+    if (!document.execCommand("copy")) throw new Error("Copy command was rejected")
+  } finally {
+    textarea.remove()
+  }
+}
+
 function SetupLink({ path }: { path: string }) {
   const [copied, setCopied] = useState(false)
   const url = typeof window === "undefined" ? path : new URL(path, window.location.origin).toString()
   return (
     <div className="space-y-2">
       <Label htmlFor="setup-link">One-time setup link</Label>
-      <div className="flex gap-2"><Input id="setup-link" value={url} readOnly className="font-mono text-xs" /><Button variant="outline" size="icon" aria-label="Copy setup link" onClick={() => navigator.clipboard.writeText(url).then(() => { setCopied(true); toast.success("Setup link copied") })}>{copied ? <Check /> : <Copy />}</Button></div>
+      <div className="flex gap-2"><Input id="setup-link" value={url} readOnly className="font-mono text-xs" /><Button variant="outline" size="icon" aria-label="Copy setup link" onClick={() => copyText(url).then(() => { setCopied(true); toast.success("Setup link copied") }).catch(() => toast.error("Could not copy setup link"))}>{copied ? <Check /> : <Copy />}</Button></div>
       <p className="text-xs leading-5 text-muted-foreground">Share this link securely. It expires in 24 hours and is replaced if you create another.</p>
     </div>
   )
@@ -78,13 +103,15 @@ function AddTokenDialog({ onCreated }: { onCreated: (token: ApiToken) => void })
   const [expires, setExpires] = useState("90")
   const [secret, setSecret] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const reset = () => { setName("Agent CLI"); setExpires("90"); setSecret(null) }
-  return <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) reset() }}>
+  const [copied, setCopied] = useState(false)
+  const reset = () => { setName("Agent CLI"); setExpires("90"); setSecret(null); setCopied(false) }
+  const close = () => { setOpen(false); reset() }
+  return <Dialog open={open} onOpenChange={(next) => { if (next) setOpen(true); else close() }}>
     <DialogTrigger render={<Button variant="outline" />}><Plus data-icon="inline-start" />Create token</DialogTrigger>
     <DialogContent className="sm:max-w-lg">
       <DialogHeader><DialogTitle>{secret ? "Copy your agent token" : "Create agent token"}</DialogTitle><DialogDescription>{secret ? "This token is shown once. Store it in your secret manager before closing." : "Use a scoped identity token for the Python CLI, MCP, Codex, or Claude Code."}</DialogDescription></DialogHeader>
-      {secret ? <div className="space-y-3"><div className="flex gap-2"><Input value={secret} readOnly className="font-mono text-xs" /><Button variant="outline" size="icon" aria-label="Copy token" onClick={() => navigator.clipboard.writeText(secret).then(() => toast.success("Token copied"))}><Copy /></Button></div><p className="text-xs text-muted-foreground">Set it as <code>RUNTRACE_API_TOKEN</code>. RunTrace stores only its SHA-256 digest.</p></div> : <form id="add-token" className="space-y-4" onSubmit={(event) => { event.preventDefault(); setBusy(true); auth.createToken({ name, expires_in_days: expires ? Number(expires) : null }).then((result) => { setSecret(result.token); onCreated(result.api_token) }).catch((error) => toast.error(error instanceof Error ? error.message : "Could not create token")).finally(() => setBusy(false)) }}><div className="space-y-2"><Label htmlFor="token-name">Name</Label><Input id="token-name" value={name} onChange={(event) => setName(event.target.value)} required /></div><div className="space-y-2"><Label htmlFor="token-expiry">Expires</Label><select id="token-expiry" value={expires} onChange={(event) => setExpires(event.target.value)} className="h-9 w-full rounded-lg border bg-background px-3 text-sm"><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="">Never</option></select></div></form>}
-      <DialogFooter>{secret ? <Button onClick={() => setOpen(false)}>I saved it</Button> : <Button form="add-token" type="submit" disabled={busy}>{busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <KeyRound data-icon="inline-start" />}Create token</Button>}</DialogFooter>
+      {secret ? <div className="space-y-3"><div className="flex gap-2"><Input value={secret} readOnly className="font-mono text-xs" /><Button variant="outline" size="icon" aria-label="Copy token" onClick={() => copyText(secret).then(() => { setCopied(true); toast.success("Token copied") }).catch(() => toast.error("Could not copy token"))}>{copied ? <Check /> : <Copy />}</Button></div><p className="text-xs text-muted-foreground">Set it as <code>RUNTRACE_API_TOKEN</code>. RunTrace stores only its SHA-256 digest.</p></div> : <form id="add-token" className="space-y-4" onSubmit={(event) => { event.preventDefault(); setBusy(true); auth.createToken({ name, expires_in_days: expires ? Number(expires) : null }).then((result) => { setSecret(result.token); setCopied(false); onCreated(result.api_token) }).catch((error) => toast.error(error instanceof Error ? error.message : "Could not create token")).finally(() => setBusy(false)) }}><div className="space-y-2"><Label htmlFor="token-name">Name</Label><Input id="token-name" value={name} onChange={(event) => setName(event.target.value)} required /></div><div className="space-y-2"><Label htmlFor="token-expiry">Expires</Label><select id="token-expiry" value={expires} onChange={(event) => setExpires(event.target.value)} className="h-9 w-full rounded-lg border bg-background px-3 text-sm"><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="">Never</option></select></div></form>}
+      <DialogFooter>{secret ? <Button onClick={close}>I saved it</Button> : <Button form="add-token" type="submit" disabled={busy}>{busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <KeyRound data-icon="inline-start" />}Create token</Button>}</DialogFooter>
     </DialogContent>
   </Dialog>
 }
