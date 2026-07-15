@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import type { ProgressData } from "@/lib/types"
 
@@ -22,12 +22,26 @@ function formatDetailDate(value: string) {
 }
 
 export function ProgressChart({ data }: { data: ProgressData }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [chartWidth, setChartWidth] = useState(940)
   const [hovered, setHovered] = useState<number | null>(null)
   const [pinned, setPinned] = useState<number | null>(null)
+
+  useEffect(() => {
+    const element = containerRef.current
+    if (!element) return
+    const updateWidth = () => setChartWidth(Math.max(280, Math.floor(element.clientWidth)))
+    updateWidth()
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
   if (!data.series.length) {
     return <div className="grid h-64 place-items-center text-center text-sm text-muted-foreground">Complete runs with the selected metric and tags to see progress.</div>
   }
-  const width = 940, height = 300, padLeft = 58, padRight = 24, padTop = 30, padBottom = 48
+  const compact = chartWidth < 480
+  const width = chartWidth, height = compact ? 260 : 300, padLeft = compact ? 44 : 58, padRight = compact ? 12 : 24, padTop = 30, padBottom = 48
   const observed = data.series.flatMap((point) => [point.improvement, point.best_improvement])
   const min = Math.min(0, ...observed), max = Math.max(0, ...observed)
   const span = max - min || 1
@@ -49,7 +63,7 @@ export function ProgressChart({ data }: { data: ProgressData }) {
     if (index === 0) return `M ${px} ${py}`
     return `${path} H ${px} V ${py}`
   }, "") + ` H ${width - padRight}`
-  const tickCount = Math.min(6, data.series.length)
+  const tickCount = Math.min(compact ? 3 : 6, data.series.length)
   const tickValues = Array.from({ length: tickCount }, (_, index) => {
     const fraction = tickCount === 1 ? 0 : index / (tickCount - 1)
     return { x: xForTime(rangeStart + timeSpan * fraction), label: formatTick(rangeStart + timeSpan * fraction, timeSpan) }
@@ -74,8 +88,8 @@ export function ProgressChart({ data }: { data: ProgressData }) {
     : Math.min(height - padBottom - detailHeight, Math.max(5, activeY - detailHeight / 2))
 
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby="progress-title progress-description" className="min-w-[620px]">
+    <div ref={containerRef} className="min-w-0">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby="progress-title progress-description" className="h-auto w-full">
         <title id="progress-title">{data.label} improvement over time</title>
         <desc id="progress-description">Best observed improvement is {data.series.at(-1)?.best_improvement.toFixed(2)} percent over the first matching run. Points are shown at intervals and for every new best. Hover or focus a point for details; click to keep it open.</desc>
         {[0, .25, .5, .75, 1].map((fraction) => {
@@ -86,7 +100,7 @@ export function ProgressChart({ data }: { data: ProgressData }) {
         <path d={stepPath} fill="none" className="stroke-success" strokeWidth="3" strokeLinejoin="round" />
         {data.series.map((point, index) => visibleIndexes.has(index) ? (
           <g key={point.run_id} role="button" tabIndex={0} aria-label={`${point.display_id}, ${point.raw_value}, ${point.improvement.toFixed(2)} percent`} className="cursor-pointer outline-none" onMouseEnter={() => setHovered(index)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(index)} onBlur={() => setHovered(null)} onClick={() => setPinned(pinned === index ? null : index)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setPinned(pinned === index ? null : index) } }}>
-            <circle cx={xForPoint(point)} cy={y(point.improvement)} r="11" className="fill-transparent" />
+            <circle cx={xForPoint(point)} cy={y(point.improvement)} r={compact ? "22" : "14"} className="fill-transparent" />
             <circle cx={xForPoint(point)} cy={y(point.improvement)} r={activeIndex === index ? "6.5" : "5"} className={point.improvement >= 0 ? "fill-background stroke-success" : "fill-background stroke-destructive"} strokeWidth="2" />
           </g>
         ) : null)}

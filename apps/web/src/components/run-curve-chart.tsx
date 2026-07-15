@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type KeyboardEvent } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import type { Run } from "@/lib/types"
 
@@ -19,20 +19,33 @@ function pathFor(points: CurvePoint[], x: (point: CurvePoint, index: number) => 
 }
 
 export function RunCurveChart({ run, baseline, metric }: { run: Run; baseline: Run | null; metric: string }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [chartWidth, setChartWidth] = useState(940)
   const [hovered, setHovered] = useState<string | null>(null)
   const [pinned, setPinned] = useState<string | null>(null)
   const runPoints = getPoints(run, metric)
   const baselinePoints = getPoints(baseline, metric)
   const points = [...runPoints, ...baselinePoints]
 
+  useEffect(() => {
+    const element = containerRef.current
+    if (!element) return
+    const updateWidth = () => setChartWidth(Math.max(260, Math.floor(element.clientWidth)))
+    updateWidth()
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
   if (!points.length) {
     return <div className="grid min-h-48 place-items-center rounded-lg border border-dashed text-center text-sm text-muted-foreground">No {metric} curve was recorded for this run.</div>
   }
 
-  const width = 940
-  const height = 300
-  const padLeft = 62
-  const padRight = 22
+  const compact = chartWidth < 480
+  const width = chartWidth
+  const height = compact ? 250 : 300
+  const padLeft = compact ? 44 : 62
+  const padRight = compact ? 12 : 22
   const padTop = 26
   const padBottom = 44
   const plotWidth = width - padLeft - padRight
@@ -50,7 +63,8 @@ export function RunCurveChart({ run, baseline, metric }: { run: Run; baseline: R
   const y = (value: number) => padTop + ((max - value) / span) * plotHeight
   const runPath = pathFor(runPoints, x, y)
   const baselinePath = pathFor(baselinePoints, x, y)
-  const tickSteps = Array.from({ length: 5 }, (_, index) => Math.round((maxStep * index) / 4))
+  const tickCount = compact ? 3 : 5
+  const tickSteps = Array.from({ length: tickCount }, (_, index) => Math.round((maxStep * index) / (tickCount - 1)))
   const lastRunPoint = runPoints.at(-1)
   const lastBaselinePoint = baselinePoints.at(-1)
   const finalDelta = lastRunPoint && lastBaselinePoint ? lastRunPoint.value - lastBaselinePoint.value : null
@@ -79,7 +93,7 @@ export function RunCurveChart({ run, baseline, metric }: { run: Run; baseline: R
   })
 
   return (
-    <div className="overflow-x-auto" data-testid="run-curve-comparison">
+    <div ref={containerRef} className="min-w-0" data-testid="run-curve-comparison">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex flex-wrap items-center gap-4">
           <span className="flex items-center gap-2 font-medium"><span className="size-2 rounded-full bg-primary" />{run.display_id} · {run.name}</span>
@@ -87,7 +101,7 @@ export function RunCurveChart({ run, baseline, metric }: { run: Run; baseline: R
         </div>
         {finalDelta !== null ? <span className="font-mono text-muted-foreground">final Δ {finalDelta > 0 ? "+" : ""}{formatValue(finalDelta)}</span> : null}
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby="curve-title curve-description" className="min-w-[620px]">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby="curve-title curve-description" className="h-auto w-full">
         <title id="curve-title">{metric} curve compared with baseline</title>
         <desc id="curve-description">The selected run is shown in the accent color and the current baseline is shown in a muted dashed line.</desc>
         {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
@@ -97,8 +111,8 @@ export function RunCurveChart({ run, baseline, metric }: { run: Run; baseline: R
         {tickSteps.map((step) => <g key={step}><line x1={padLeft + (step / maxStep) * plotWidth} x2={padLeft + (step / maxStep) * plotWidth} y1={padTop} y2={height - padBottom} className="stroke-border/60" strokeDasharray="3 5" /><text x={padLeft + (step / maxStep) * plotWidth} y={height - 14} textAnchor="middle" className="fill-muted-foreground text-[10px] font-mono">{step.toLocaleString()}</text></g>)}
         {baselinePath ? <path d={baselinePath} fill="none" className="stroke-muted-foreground" strokeWidth="2" strokeDasharray="7 5" strokeLinecap="round" strokeLinejoin="round" /> : null}
         {runPath ? <path d={runPath} fill="none" className="stroke-primary" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /> : null}
-        {baseline?.id !== run.id ? baselinePoints.map((point, index) => { const key = `baseline:${index}`; return <g key={key} role="button" tabIndex={0} aria-label={`Baseline, step ${point.step ?? index}, ${metric} ${formatValue(point.value)}`} className="cursor-pointer outline-none" {...pointEvents(key)}><circle cx={x(point, index)} cy={y(point.value)} r="11" className="fill-transparent" /><circle cx={x(point, index)} cy={y(point.value)} r={activeKey === key ? 6 : point === lastBaselinePoint ? 4.5 : 3} className="fill-background stroke-muted-foreground" strokeWidth="2" /></g> }) : null}
-        {runPoints.map((point, index) => { const key = `run:${index}`; return <g key={key} role="button" tabIndex={0} aria-label={`${run.display_id}, step ${point.step ?? index}, ${metric} ${formatValue(point.value)}`} className="cursor-pointer outline-none" {...pointEvents(key)}><circle cx={x(point, index)} cy={y(point.value)} r="11" className="fill-transparent" /><circle cx={x(point, index)} cy={y(point.value)} r={activeKey === key ? 6.5 : point === lastRunPoint ? 5 : 3.5} className="fill-background stroke-primary" strokeWidth="2" /></g> })}
+        {baseline?.id !== run.id ? baselinePoints.map((point, index) => { const key = `baseline:${index}`; return <g key={key} role="button" tabIndex={0} aria-label={`Baseline, step ${point.step ?? index}, ${metric} ${formatValue(point.value)}`} className="cursor-pointer outline-none" {...pointEvents(key)}><circle cx={x(point, index)} cy={y(point.value)} r={compact ? "22" : "14"} className="fill-transparent" /><circle cx={x(point, index)} cy={y(point.value)} r={activeKey === key ? 6 : point === lastBaselinePoint ? 4.5 : 3} className="fill-background stroke-muted-foreground" strokeWidth="2" /></g> }) : null}
+        {runPoints.map((point, index) => { const key = `run:${index}`; return <g key={key} role="button" tabIndex={0} aria-label={`${run.display_id}, step ${point.step ?? index}, ${metric} ${formatValue(point.value)}`} className="cursor-pointer outline-none" {...pointEvents(key)}><circle cx={x(point, index)} cy={y(point.value)} r={compact ? "22" : "14"} className="fill-transparent" /><circle cx={x(point, index)} cy={y(point.value)} r={activeKey === key ? 6.5 : point === lastRunPoint ? 5 : 3.5} className="fill-background stroke-primary" strokeWidth="2" /></g> })}
         {activePoint ? <foreignObject x={detailX} y={detailY} width={detailWidth} height={detailHeight} className="pointer-events-none overflow-visible">
           <div className="rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-lg">
             <div className="flex items-center justify-between gap-3"><strong className="font-mono">{activeSource === "baseline" ? `Baseline · ${baseline?.display_id}` : run.display_id}</strong><span className="text-muted-foreground">Step {(activePoint.step ?? activeIndex).toLocaleString()}</span></div>

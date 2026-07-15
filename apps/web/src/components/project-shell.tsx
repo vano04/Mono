@@ -49,10 +49,10 @@ function ProjectNavigation({ project, mobile = false }: { project: Project; mobi
 
 export function ProjectShell({ project, children }: { project: Project; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[248px_1fr]">
-      <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r bg-sidebar lg:block"><ProjectNavigation project={project} /></aside>
-      <div className="lg:col-start-2">
-        <div className="flex h-16 items-center border-b px-4 lg:hidden">
+    <div className="min-h-screen bg-background xl:grid xl:grid-cols-[248px_minmax(0,1fr)]">
+      <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r bg-sidebar xl:block"><ProjectNavigation project={project} /></aside>
+      <div className="min-w-0 xl:col-start-2">
+        <div className="flex h-16 items-center border-b px-4 xl:hidden">
           <Sheet>
             <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Open navigation" />}><Menu /></SheetTrigger>
             <SheetContent side="left" className="w-[280px] p-0">
@@ -62,7 +62,7 @@ export function ProjectShell({ project, children }: { project: Project; children
           </Sheet>
           <div className="ml-2 truncate text-sm font-medium">{project.name}</div>
         </div>
-        <main className="mx-auto w-full max-w-[1240px] px-4 py-7 sm:px-8 sm:py-10 xl:px-12">{children}</main>
+        <main className="mx-auto w-full min-w-0 max-w-[1240px] px-4 py-7 sm:px-8 sm:py-10 xl:px-12">{children}</main>
       </div>
     </div>
   )
