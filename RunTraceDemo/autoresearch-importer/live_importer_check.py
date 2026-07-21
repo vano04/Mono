@@ -11,8 +11,10 @@ import httpx
 
 ROOT = Path(__file__).resolve().parents[2]
 TSV = Path(__file__).with_name("results.tsv")
-PROJECT = "permission-qa-autoresearch-importer"
+PROJECT = "integration-test-autoresearch-importer"
 BASE_URL = "http://localhost:8000"
+TEST_USERNAME = os.getenv("RUNTRACE_TEST_USERNAME", "integration-owner")
+TEST_PASSWORD = os.environ["RUNTRACE_TEST_PASSWORD"]
 
 
 def load_importer():
@@ -32,14 +34,14 @@ async def main() -> None:
     with httpx.Client(base_url=BASE_URL, timeout=30) as owner:
         login = owner.post(
             "/api/v1/auth/login",
-            json={"username": "qa-owner", "password": "RunTrace-QA-2026!temporary"},
+            json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         login.raise_for_status()
         try:
             created = owner.post(
                 "/api/v1/projects",
                 json={
-                    "name": "Permission QA Autoresearch Importer",
+                    "name": "Integration Test Autoresearch Importer",
                     "slug": PROJECT,
                     "description": "Disposable live verification of every importer transport.",
                 },

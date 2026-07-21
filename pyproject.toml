@@ -1,6 +1,6 @@
 [project]
 name = "runtrace-ai"
-version = "0.1.4"
+version = "0.1.5"
 description = "Persistent experiment memory for autonomous research agents"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -60,6 +60,18 @@ packages = [
   "apps/api/runtrace_api",
   "apps/mcp/runtrace_mcp",
   "packages/python_sdk/runtrace",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.agents",
+  "/.claude-plugin",
+  "/.github",
+  "/.codex",
+  "/RunTraceDemo",
+  "/artifacts",
+  "/design-qa.md",
+  "/docs/verification-report.md",
 ]
 
 [tool.pytest.ini_options]

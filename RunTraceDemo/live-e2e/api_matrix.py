@@ -10,7 +10,7 @@ import httpx
 from runtrace.credentials import resolve_connection
 
 
-PROJECT = "permission-qa-registry"
+PROJECT = "integration-test-registry"
 WORKER = "api-matrix-worker"
 
 
@@ -66,7 +66,7 @@ def main() -> None:
         checks.append("health/docs/proxies")
 
         auth_status = expect(api.get("/api/v1/auth/status"), 200, "bearer auth status")
-        assert auth_status["authenticated"] is True and auth_status["identity"]["username"] == "qa-owner"
+        assert auth_status["authenticated"] is True and auth_status["identity"]["username"] == "integration-owner"
         for method, path, body in [
             ("POST", "/api/v1/auth/password", {"current_password": "x", "new_password": "not permitted here"}),
             ("PATCH", "/api/v1/auth/preferences", {"locale": "fr"}),
@@ -85,7 +85,7 @@ def main() -> None:
         program = expect(
             api.put(
                 f"/api/v1/projects/{PROJECT}/program",
-                json={"content": context["program"]["content"] + "\n\nLive API matrix verified.", "actor": "permission-qa"},
+                json={"content": context["program"]["content"] + "\n\nLive API matrix verified.", "actor": "integration-test"},
             ),
             200,
             "program version",
@@ -95,7 +95,7 @@ def main() -> None:
         exclusions = expect(
             api.put(
                 f"/api/v1/projects/{PROJECT}/exclusions",
-                json={"rules": context["exclusions"] + ["Do not reuse permission QA identifiers"], "actor": "permission-qa"},
+                json={"rules": context["exclusions"] + ["Do not reuse integration-test identifiers"], "actor": "integration-test"},
             ),
             200,
             "exclusions version",
@@ -114,7 +114,7 @@ def main() -> None:
                     "source": "qa",
                     "source_model": "codex",
                     "metric_mode": "curve",
-                    "configuration": {"tags": ["permission-qa", "live-api"]},
+                    "configuration": {"tags": ["integration-test", "live-api"]},
                     "priority": 5,
                 },
             ),
@@ -137,9 +137,9 @@ def main() -> None:
             "reasoning": experiment["reasoning"],
             "change_summary": "Exercised live permission-unblocked endpoints.",
             "decision_changed": "Moved environment-limited checks to an isolated PostgreSQL stack.",
-            "evidence_used": [{"kind": "verification-report", "lesson": "Live authority was previously unavailable."}],
+            "evidence_used": [{"kind": "prior-test", "lesson": "Live authority was previously unavailable."}],
             "metric_mode": "curve",
-            "configuration": {"tags": ["permission-qa", "live-api"], "matrix": True},
+            "configuration": {"tags": ["integration-test", "live-api"], "matrix": True},
         }
         expect(api.post(f"/api/v1/projects/{PROJECT}/runs", json=run_body), 409, "missing claim worker")
         expect(
@@ -198,7 +198,7 @@ def main() -> None:
         )
         assert event_replay["id"] == event["id"] and event_replay["message"] == "Initial live evidence"
         expect(
-            api.post(f"/api/v1/runs/{run_id}/parameters", json={"parameters": {"batch_size": 4, "tags": ["permission-qa", "live-api"]}}),
+            api.post(f"/api/v1/runs/{run_id}/parameters", json={"parameters": {"batch_size": 4, "tags": ["integration-test", "live-api"]}}),
             202,
             "parameter upsert",
         )
@@ -208,13 +208,13 @@ def main() -> None:
         artifact = expect(
             api.post(
                 f"/api/v1/runs/{run_id}/artifacts",
-                files={"file": ("../../permission-qa.log", preview_bytes, "text/plain")},
+                files={"file": ("../../integration-test.log", preview_bytes, "text/plain")},
                 data={"metadata": json.dumps({"kind": "log", "synthetic": True})},
             ),
             201,
             "large text artifact",
         )
-        assert artifact["name"] == "permission-qa.log"
+        assert artifact["name"] == "integration-test.log"
         preview = expect(api.get(f"/api/v1/artifacts/{artifact['id']}/preview"), 200, "artifact preview")
         assert preview["truncated"] is True and len(preview["content"].encode()) == 512_000
         downloaded = expect(api.get(f"/api/v1/artifacts/{artifact['id']}/download"), 200, "artifact download")
@@ -242,7 +242,7 @@ def main() -> None:
 
         inline_spec = {
             "version": 1,
-            "title": "Permission QA summary",
+            "title": "Integration Test summary",
             "datasets": {"rows": {"source": "inline", "rows": [{"label": "live", "value": 1}]}},
             "view": {"type": "card", "children": [{"type": "metric", "dataset": "rows", "field": "value", "label": "Live checks"}]},
         }
@@ -280,7 +280,7 @@ def main() -> None:
         visualization = expect(
             api.post(
                 f"/api/v1/projects/{PROJECT}/visualizations",
-                json={"name": "Persistent live API metrics", "description": "Created by permission-unblocked QA", "source_run_id": run_id, "spec": run_metrics_spec},
+                json={"name": "Persistent live API metrics", "description": "Created by the integration test", "source_run_id": run_id, "spec": run_metrics_spec},
             ),
             201,
             "source-bound visualization",
@@ -374,7 +374,7 @@ def main() -> None:
         checks.append("reverse-proxy SSE resume and terminal replay")
 
         baseline = expect(
-            api.post(f"/api/v1/projects/{PROJECT}/baseline", json={"run_id": run_id, "actor": "permission-qa", "request_id": "api-matrix-baseline"}),
+            api.post(f"/api/v1/projects/{PROJECT}/baseline", json={"run_id": run_id, "actor": "integration-test", "request_id": "api-matrix-baseline"}),
             200,
             "set baseline",
         )
@@ -425,7 +425,7 @@ def main() -> None:
         assert crashed["result_summary"] == crash_replay["result_summary"] == "Synthetic expected failure"
         checks.append("crash/replay")
 
-        unused_type_key = "permission-qa-unused"
+        unused_type_key = "integration-test-unused"
         type_spec = {
             "version": 1,
             "title": "Latest QA metrics",
@@ -435,7 +435,7 @@ def main() -> None:
         expect(
             api.post(
                 f"/api/v1/projects/{PROJECT}/result-visualizations",
-                json={"key": unused_type_key, "name": "Permission QA unused", "description": "Temporary live type", "spec": type_spec},
+                json={"key": unused_type_key, "name": "Integration Test unused", "description": "Temporary live type", "spec": type_spec},
             ),
             201,
             "create result type",
@@ -444,9 +444,9 @@ def main() -> None:
         checks.append("custom result type lifecycle")
 
         members = expect(api.get(f"/api/v1/auth/projects/{PROJECT}/members"), 200, "project members")
-        assert any(member["identity"]["username"] == "qa-owner" and member["role"] == "owner" for member in members)
+        assert any(member["identity"]["username"] == "integration-owner" and member["role"] == "owner" for member in members)
         tags = expect(api.get(f"/api/v1/projects/{PROJECT}/tags"), 200, "tag registry")
-        assert {tag["name"] for tag in tags} >= {"permission-qa", "live-api"}
+        assert {tag["name"] for tag in tags} >= {"integration-test", "live-api"}
         checks.append("membership and auto-tag registry")
 
     with httpx.Client(base_url=base_url, timeout=timeout) as anonymous:

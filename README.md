@@ -19,7 +19,7 @@ The repository contains the maintained FastAPI service, Next.js application, Pyt
 - project-scoped, MCP-generated RTVis widgets with ShadCN theming, sandboxed JavaScript, and portable JSON import and export;
 - HTTP, Python, CLI, and MCP interfaces.
 
-The [complete feature catalog](docs/features.md) lists every current-source web, HTTP, SDK, CLI, MCP, visualization, authentication, and operational capability. The [verification report](docs/verification-report.md) records automated and live PostgreSQL results, browser QA, Luna xhigh Codex experiments, fixes, published-artifact status, and remaining boundaries.
+The [complete feature catalog](docs/features.md) lists every current-source web, HTTP, SDK, CLI, MCP, visualization, authentication, and operational capability.
 
 ## Architecture
 
@@ -57,7 +57,7 @@ To deploy the published GitHub Container packages instead of building locally:
 docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
 ```
 
-The overlay defaults to `ghcr.io/vano04/runtrace:0.1.4` and `ghcr.io/vano04/runtrace-web:0.1.4`. Confirm that the selected tag exists in GitHub Packages or set `RUNTRACE_VERSION` to another published release.
+The overlay defaults to `ghcr.io/vano04/runtrace:0.1.5` and `ghcr.io/vano04/runtrace-web:0.1.5`. Confirm that the selected tag exists in GitHub Packages or set `RUNTRACE_VERSION` to another published release.
 
 Useful endpoints:
 
@@ -143,10 +143,10 @@ Agent loops should claim one proposal at a time. When `create_run` starts a pend
 Run the MCP server over stdio without a persistent install:
 
 ```bash
-uvx --from 'runtrace-ai[mcp]==0.1.4' runtrace-mcp
+uvx --from 'runtrace-ai[mcp]==0.1.5' runtrace-mcp
 ```
 
-Public packages can lag this checkout. To exercise the exact current source during development, use `uv run --extra mcp runtrace-mcp`; consult the verification report before relying on a pinned published artifact.
+Public packages can lag this checkout. To exercise the exact current source during development, use `uv run --extra mcp runtrace-mcp`.
 
 ## Codex and Claude Code plugins
 
@@ -210,7 +210,7 @@ docs/                deployment and authentication documentation
 examples/            small instrumentation examples
 packages/python_sdk/ Python SDK and CLI
 plugins/runtrace/     Codex and Claude Code plugin bundle
-RunTraceDemo/         isolated uv-run synthetic agent/CLI/SDK QA fixtures
+RunTraceDemo/         reusable integration-test harnesses
 scripts/             maintenance and import helpers
 tests/               API, migration, SDK, CLI, and MCP tests
 ```

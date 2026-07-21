@@ -6,8 +6,8 @@ from runtrace import RunTrace
 from runtrace.credentials import resolve_connection
 
 
-PROJECT = "permission-qa-registry"
-PREFIX = "codex-qa-sdk-cli-20260721"
+PROJECT = "integration-test-registry"
+PREFIX = "integration-sdk-cli"
 base_url, token = resolve_connection()
 client = RunTrace(base_url=base_url, api_token=token, strict=True)
 artifact_path = Path(__file__).with_name("real_sdk_artifact.txt")

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
+
 import httpx
 
 
 BASE_URL = "http://localhost:8000"
-PROJECT = "permission-qa-semantic-search"
+PROJECT = "integration-test-semantic-search"
+TEST_USERNAME = os.getenv("RUNTRACE_TEST_USERNAME", "integration-owner")
+TEST_PASSWORD = os.environ["RUNTRACE_TEST_PASSWORD"]
 
 
 def main() -> None:
@@ -13,14 +17,14 @@ def main() -> None:
     with httpx.Client(base_url=BASE_URL, timeout=180) as owner:
         response = owner.post(
             "/api/v1/auth/login",
-            json={"username": "qa-owner", "password": "RunTrace-QA-2026!temporary"},
+            json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
         )
         response.raise_for_status()
         try:
             response = owner.post(
                 "/api/v1/projects",
                 json={
-                    "name": "Permission QA Semantic Search",
+                    "name": "Integration Test Semantic Search",
                     "slug": PROJECT,
                     "description": "Disposable optional-embedding verification.",
                 },

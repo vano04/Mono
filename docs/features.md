@@ -1,6 +1,6 @@
 # RunTrace feature catalog
 
-This catalog describes the current repository source (package metadata `0.1.4`). It distinguishes public product behavior from internal records and migration-only compatibility tables; published artifacts can lag the source and are tracked in [verification-report.md](verification-report.md).
+This catalog describes the current repository source (package metadata `0.1.5`) and distinguishes public product behavior from internal records and migration-only compatibility tables.
 
 ## Product surfaces
 
@@ -353,7 +353,7 @@ Its 32 tools are:
 - Public API health at `GET /health`, FastAPI Swagger at `/docs`, OpenAPI JSON at `/openapi.json`, and web-proxied `/api/docs`, `/api/openapi.json`, `/openapi.json`, API, and health routes.
 - Configurable CORS origins, artifact-size limit, claim timeout, browser-session/setup-link TTLs, cookie security, and embedding model/cache.
 - Source-build installer, fast-forward updater, and destructive demo reset scripts.
-- GHCR deployment overlay plus workflows for versioned API/web images; actual public tag availability is recorded separately in the verification report.
+- GHCR deployment overlay plus workflows for versioned API/web images.
 - GitHub Actions CI runs the locked Python suite, web lint/build, and Compose validation for pushes and pull requests.
 - Version tags build and Twine-check wheel/source distributions and attach them to a GitHub Release.
 - Direct `v*` tag pushes publish GitHub release artifacts, the trusted-publishing PyPI distribution, and provenance-attested `linux/amd64` API/web images for GHCR; PyPI and container workflows also support validated exact-tag manual recovery.
@@ -375,4 +375,4 @@ These are not public features and should not be advertised as such:
 
 ## Verification
 
-See [verification-report.md](verification-report.md) for automated results, browser evidence, Luna xhigh Codex experiments, fixes, and environment/permission limitations.
+GitHub Actions verifies release-version consistency, runs the locked Python and web test suites, checks lint and TypeScript, builds the Python distributions and production web application, and validates the Compose configuration for pushes and pull requests.

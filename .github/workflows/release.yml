@@ -19,6 +19,8 @@ jobs:
         run: uv run --no-project python scripts/check_release_version.py --expected "${GITHUB_REF_NAME#v}"
       - name: Build wheel and source distribution
         run: uv build
+      - name: Verify public distribution contents
+        run: uv run --no-project python scripts/check_distribution_contents.py dist
       - name: Verify distributions
         run: uv run --with twine twine check dist/*
       - uses: actions/upload-artifact@v6

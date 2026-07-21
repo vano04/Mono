@@ -2,7 +2,7 @@
 
 The included Compose stack is the supported single-host deployment baseline. It runs PostgreSQL, the API, and the web app with persistent named volumes. Review this guide and `auth.md` before making the instance reachable outside localhost.
 
-For product behavior, see the [complete feature catalog](features.md). For the latest repository-wide QA evidence and known environment limitations, see the [verification report](verification-report.md).
+For product behavior, see the [complete feature catalog](features.md).
 
 ## Deployment modes
 
@@ -18,7 +18,7 @@ The release images can be deployed without a source build:
 docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
 ```
 
-This pulls `ghcr.io/vano04/runtrace` and `ghcr.io/vano04/runtrace-web`. Both default to the version in `RUNTRACE_VERSION` or `0.1.4` and are published for Linux AMD64.
+This pulls `ghcr.io/vano04/runtrace` and `ghcr.io/vano04/runtrace-web`. Both default to the version in `RUNTRACE_VERSION` or `0.1.5` and are published for Linux AMD64.
 
 Development mode is unauthenticated and seeds an empty database:
 

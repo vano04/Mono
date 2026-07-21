@@ -6,14 +6,14 @@ from runtrace import RunTrace
 from runtrace.credentials import resolve_connection
 
 
-PROJECT = "permission-qa-registry"
+PROJECT = "integration-test-registry"
 expected_id = os.environ["RUNTRACE_RUN_ID"]
 base_url, token = resolve_connection()
 client = RunTrace(base_url=base_url, api_token=token, strict=True)
 
 with client.run(
     PROJECT,
-    "codex-qa-sdk-cli-20260721-sdk-attached",
+    "integration-sdk-cli-attached",
     "The SDK attaches to the MCP-created running record without creating a second run.",
     "MCP is the creator; RUNTRACE_RUN_ID is the lifecycle handoff.",
     tags=["qa", "attachment", "synthetic"],
