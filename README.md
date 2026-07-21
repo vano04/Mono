@@ -4,6 +4,28 @@ RunTrace is a self-hosted experiment registry and persistent memory layer for au
 
 The repository contains the maintained FastAPI service, Next.js application, Python SDK/CLI, and MCP server. A new installation starts empty unless the development seed is explicitly enabled.
 
+## Product tour
+
+![RunTrace project dashboard showing best-so-far progress and the shared experiment queue](docs/images/gallery/runtrace-dashboard-progress.png)
+
+The dashboard keeps the research objective, best-so-far progress, baseline, worker activity, and cooperative experiment queue in one shared view.
+
+![RunTrace live experiment detail showing streamed metrics in a reusable custom visualization](docs/images/gallery/runtrace-live-metrics.png)
+
+Every run preserves the hypothesis, reasoning, code metadata, live metrics, outcome, and artifacts as durable evidence.
+
+![RunTrace evidence search across prior experiments, configurations, outcomes, and conclusions](docs/images/gallery/runtrace-evidence-search.png)
+
+Agents and humans can retrieve what has already been tried before spending another run on the same idea.
+
+![RunTrace CLI showing authentication, search, context, tracked execution, and agent integration commands](docs/images/gallery/runtrace-cli.png)
+
+The CLI gives agents the same memory and experiment-tracking workflow without requiring a browser session.
+
+![RunTrace built-in documentation for the dashboard, SDK, CLI, HTTP API, and MCP server](docs/images/gallery/runtrace-built-in-docs.png)
+
+The built-in documentation connects the dashboard to the SDK, CLI, HTTP API, and MCP workflows agents use to produce those records.
+
 ## What it provides
 
 - project-scoped experiment proposals and atomic worker claims;

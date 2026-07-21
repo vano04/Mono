@@ -14,7 +14,6 @@ export function AccountMenu() {
   const { t } = useI18n()
   const initials = identity.username.slice(0, 2).toUpperCase()
 
-  if (status.dev) return <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">{t("Dev · no auth")}</span>
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" className="gap-2 px-2" />}>
@@ -23,13 +22,12 @@ export function AccountMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuGroup>
-          <DropdownMenuLabel><span className="block truncate text-foreground">{identity.username}</span><span className="block font-normal capitalize">{identity.role}</span></DropdownMenuLabel>
+          <DropdownMenuLabel><span className="block truncate text-foreground">{identity.username}</span><span className="block font-normal capitalize">{status.dev ? t("Dev · no auth") : identity.role}</span></DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem render={<Link href="/access" />}><ShieldCheck />{identity.role === "member" ? t("Agent tokens") : t("Access")}</DropdownMenuItem>
         <DropdownMenuItem render={<Link href="/account" />}><Settings />{t("Settings")}</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={() => signOut().catch(() => toast.error(t("Could not sign out")))}><LogOut />{t("Sign out")}</DropdownMenuItem>
+        {!status.dev ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => signOut().catch(() => toast.error(t("Could not sign out")))}><LogOut />{t("Sign out")}</DropdownMenuItem></> : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )
