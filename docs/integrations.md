@@ -119,7 +119,7 @@ Or run `runtrace integrations install claude`, then run `runtrace auth`.
 Any stdio MCP host can run:
 
 ```bash
-uvx --from 'runtrace-ai[mcp]==0.1.4' runtrace-mcp
+uvx --from 'runtrace-ai[mcp]==0.1.5' runtrace-mcp
 ```
 
 The host needs `uv` plus either credentials saved by `runtrace auth` or the `RUNTRACE_BASE_URL` and `RUNTRACE_API_TOKEN` environment variables. Its first launch needs network access to GitHub and the Python package index.

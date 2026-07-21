@@ -8,7 +8,7 @@ import httpx
 from runtrace.credentials import resolve_connection
 
 
-PROJECT = "permission-qa-registry"
+PROJECT = "integration-test-registry"
 
 
 def main() -> None:

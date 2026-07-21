@@ -7,7 +7,7 @@ import httpx
 from runtrace.credentials import resolve_connection
 
 
-PROJECT = "permission-qa-registry"
+PROJECT = "integration-test-registry"
 
 
 def first_frame(base_url: str, token: str, run_id: str) -> dict[str, object]:

@@ -39,3 +39,9 @@ yarn-error.log*
 # Runtime data
 data/
 tests/.runtime/
+
+# Local QA reports and generated browser evidence
+/design-qa.md
+/docs/verification-report.md
+/artifacts/
+/RunTraceDemo/browser-e2e/*.png

@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Release tag to publish (for example v0.1.4)
+        description: Release tag to publish (for example v0.1.5)
         required: true
-        default: v0.1.4
+        default: v0.1.5
 
 permissions:
   contents: read
@@ -45,7 +45,7 @@ jobs:
           RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
         run: |
           if ! printf '%s\n' "$RELEASE_REF" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
-            echo "Expected a version tag such as v0.1.4; got: $RELEASE_REF" >&2
+            echo "Expected a version tag such as v0.1.5; got: $RELEASE_REF" >&2
             exit 1
           fi
           echo "ref=refs/tags/$RELEASE_REF" >> "$GITHUB_OUTPUT"

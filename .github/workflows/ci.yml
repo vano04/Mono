@@ -31,6 +31,8 @@ jobs:
         run: uv run pytest
       - name: Build distributions
         run: uv build
+      - name: Verify public distribution contents
+        run: uv run --no-project python scripts/check_distribution_contents.py dist
       - name: Verify distributions
         run: uv run --with twine twine check dist/*
 
