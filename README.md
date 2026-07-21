@@ -11,12 +11,15 @@ The repository contains the maintained FastAPI service, Next.js application, Pyt
 - parameters, Git metadata, logs, and downloadable artifacts;
 - versioned `program.md` instructions and research exclusions;
 - completed-run baselines and best-so-far progress charts;
-- archive, restore, soft-delete, and audit history;
+- archive, restore, soft-delete, and internal mutation audit records;
 - keyword search, with optional pgvector semantic retrieval;
 - browser password authentication for a self-hosted instance;
 - revocable, expiring agent tokens for headless clients;
+- read-only viewer, project editor, and project owner roles with matching API and web controls;
 - project-scoped, MCP-generated RTVis widgets with ShadCN theming, sandboxed JavaScript, and portable JSON import and export;
 - HTTP, Python, CLI, and MCP interfaces.
+
+The [complete feature catalog](docs/features.md) lists every current-source web, HTTP, SDK, CLI, MCP, visualization, authentication, and operational capability. The [verification report](docs/verification-report.md) records automated and live PostgreSQL results, browser QA, Luna xhigh Codex experiments, fixes, published-artifact status, and remaining boundaries.
 
 ## Architecture
 
@@ -54,7 +57,7 @@ To deploy the published GitHub Container packages instead of building locally:
 docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
 ```
 
-The images are `ghcr.io/vano04/runtrace:0.1.3` for the API/CLI/MCP runtime and `ghcr.io/vano04/runtrace-web:0.1.3` for the dashboard. Set `RUNTRACE_VERSION` to select another release.
+The overlay defaults to `ghcr.io/vano04/runtrace:0.1.3` and `ghcr.io/vano04/runtrace-web:0.1.3`. Confirm that the selected tag exists in GitHub Packages or set `RUNTRACE_VERSION` to an available release. The 2026-07-21 verification found that the public 0.1.3 container tags had not yet been backfilled, so build from source for the current behavior until those images are published.
 
 Useful endpoints:
 
@@ -135,11 +138,15 @@ runtrace exec --project <project-slug> --name "new variation" \
   python benchmark.py
 ```
 
+Agent loops should claim one proposal at a time. When `create_run` starts a pending proposal, pass the same cooperative `worker_id` returned on the claim; RunTrace rejects missing or mismatched claim identifiers.
+
 Run the MCP server over stdio without a persistent install:
 
 ```bash
 uvx --from 'runtrace-ai[mcp]==0.1.3' runtrace-mcp
 ```
+
+Public packages can lag this checkout. To exercise the exact current source during development, use `uv run --extra mcp runtrace-mcp`; consult the verification report before relying on a pinned published artifact.
 
 ## Codex and Claude Code plugins
 
@@ -182,7 +189,9 @@ Compose disables embeddings by default to keep the base deployment lightweight. 
 UV_CACHE_DIR=.uv-cache uv sync --all-extras
 UV_CACHE_DIR=.uv-cache uv run pytest
 UV_CACHE_DIR=.uv-cache uv build
+npm --prefix apps/web test
 npm --prefix apps/web run lint
+npm --prefix apps/web run typecheck
 npm --prefix apps/web run build
 docker compose config
 docker compose -f docker-compose.yml -f docker-compose.ghcr.yml config
@@ -201,6 +210,7 @@ docs/                deployment and authentication documentation
 examples/            small instrumentation examples
 packages/python_sdk/ Python SDK and CLI
 plugins/runtrace/     Codex and Claude Code plugin bundle
+RunTraceDemo/         isolated uv-run synthetic agent/CLI/SDK QA fixtures
 scripts/             maintenance and import helpers
 tests/               API, migration, SDK, CLI, and MCP tests
 ```

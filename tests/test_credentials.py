@@ -47,6 +47,19 @@ def test_environment_overrides_saved_credentials(monkeypatch, tmp_path):
     assert resolve_connection() == ("https://environment.example", "rt_environment")
 
 
+def test_saved_token_is_not_reused_for_a_different_origin(monkeypatch, tmp_path):
+    path = tmp_path / "credentials.json"
+    path.write_text(json.dumps({
+        "base_url": "https://saved.example",
+        "api_token": "rt_saved",
+    }))
+    monkeypatch.setenv("RUNTRACE_CREDENTIALS_FILE", str(path))
+    monkeypatch.delenv("RUNTRACE_API_TOKEN", raising=False)
+    monkeypatch.delenv("RUNTRACE_API_KEY", raising=False)
+
+    assert resolve_connection("https://other.example/") == ("https://other.example", None)
+
+
 def test_explicit_connection_overrides_environment(monkeypatch):
     monkeypatch.setenv("RUNTRACE_BASE_URL", "https://environment.example")
     monkeypatch.setenv("RUNTRACE_API_TOKEN", "rt_environment")

@@ -23,7 +23,7 @@ Every execution attempt has exactly one run. Before creating it, determine wheth
 
 ## Execute a run
 
-1. Create or attach the single run when execution begins. Include the claim, hypothesis, reasoning, evidence, decision change, and relevant configuration.
+1. Create or attach the single run when execution begins. Include the claim's `worker_id` when starting a pending experiment, plus the hypothesis, reasoning, evidence, decision change, and relevant configuration.
 2. Preserve the proposal's result display unless intentionally overriding it.
 3. Prefer `log_metrics` for related points; use stable names and steps. Log meaningful decisions and failures as events.
 4. Use `finish_run` for completed positive or negative results and `crash_run` for unexpected process failure.

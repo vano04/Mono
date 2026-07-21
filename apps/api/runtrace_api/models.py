@@ -402,6 +402,13 @@ class SearchDocument(Base):
     __table_args__ = (
         UniqueConstraint("document_type", "source_id"),
         Index("ix_search_document_project_type", "project_id", "document_type"),
+        Index(
+            "ix_search_documents_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_where=text("embedding IS NOT NULL"),
+        ).ddl_if(dialect="postgresql"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("search"))

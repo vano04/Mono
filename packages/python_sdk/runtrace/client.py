@@ -65,7 +65,27 @@ class RunTrace:
         )
         self._buffer: deque[tuple[str, str, dict[str, Any], str]] = deque(maxlen=2000)
         self._lock = threading.Lock()
-        atexit.register(self.flush)
+        atexit.register(self._flush_at_exit)
+
+    def _queue_request(self, method: str, path: str, payload: dict[str, Any], request_id: str) -> None:
+        with self._lock:
+            if self._buffer.maxlen is not None and len(self._buffer) >= self._buffer.maxlen:
+                raise BufferError(f"RunTrace buffer is full ({self._buffer.maxlen} requests)")
+            self._buffer.append((method, path, payload, request_id))
+
+    def _is_buffered(self, request_id: str) -> bool:
+        with self._lock:
+            return any(item[3] == request_id for item in self._buffer)
+
+    def _flush_at_exit(self) -> None:
+        try:
+            self.flush()
+        except Exception as exc:
+            warnings.warn(
+                f"RunTrace could not flush buffered writes during shutdown: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
     def request(self, method: str, path: str, payload: dict[str, Any] | None = None, *, buffer: bool = False, request_id: str | None = None) -> Any:
         request_id = request_id or str(uuid.uuid4())
@@ -73,10 +93,22 @@ class RunTrace:
             response = self.client.request(method, path, json=payload, headers={"X-Request-ID": request_id})
             response.raise_for_status()
             return response.json() if response.content else None
-        except (httpx.HTTPError, OSError):
+        except httpx.HTTPStatusError as exc:
+            if self.strict:
+                raise
+            if buffer and exc.response.status_code >= 500:
+                self._queue_request(method, path, payload or {}, request_id)
+                warnings.warn(f"RunTrace is unavailable; buffered {method} {path}", RuntimeWarning, stacklevel=2)
+            else:
+                warnings.warn(
+                    f"RunTrace rejected {method} {path} with HTTP {exc.response.status_code}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            return None
+        except (httpx.RequestError, OSError):
             if buffer:
-                with self._lock:
-                    self._buffer.append((method, path, payload or {}, request_id))
+                self._queue_request(method, path, payload or {}, request_id)
                 warnings.warn(f"RunTrace is unavailable; buffered {method} {path}", RuntimeWarning, stacklevel=2)
                 return None
             if self.strict:
@@ -91,13 +123,33 @@ class RunTrace:
             try:
                 response = self.client.request(method, path, json=payload, headers={"X-Request-ID": request_id})
                 response.raise_for_status()
-            except (httpx.HTTPError, OSError):
+            except httpx.HTTPStatusError as exc:
+                if self.strict:
+                    raise
+                if exc.response.status_code >= 500:
+                    break
+                with self._lock:
+                    if self._buffer and self._buffer[0][3] == request_id:
+                        self._buffer.popleft()
+                warnings.warn(
+                    f"RunTrace discarded rejected buffered request {method} {path} (HTTP {exc.response.status_code})",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                continue
+            except (httpx.RequestError, OSError):
+                if self.strict:
+                    raise
                 break
             with self._lock:
                 if self._buffer and self._buffer[0][3] == request_id:
                     self._buffer.popleft()
             sent += 1
         return sent
+
+    def _defer_request(self, method: str, path: str, payload: dict[str, Any]) -> None:
+        self._queue_request(method, path, payload, str(uuid.uuid4()))
+        warnings.warn(f"RunTrace is unavailable; buffered {method} {path}", RuntimeWarning, stacklevel=3)
 
     def search(self, project: str, query: str, limit: int = 10, include_archived: bool = False) -> dict[str, Any] | None:
         return self.request("POST", "/api/v1/search", {"project": project, "query": query, "limit": limit, "include_archived": include_archived})
@@ -159,8 +211,15 @@ class Run:
         return self
 
     def __exit__(self, exc_type, exc, traceback) -> bool:
-        if exc is not None:
-            self.abort(str(exc))
+        if exc is not None and not self._finished:
+            try:
+                self.abort(str(exc))
+            except Exception as tracking_error:
+                warnings.warn(
+                    f"RunTrace could not record the run failure: {tracking_error}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
         elif not self._finished:
             self.finish("undecided")
         return False
@@ -235,12 +294,43 @@ class Run:
 
     def finish(self, outcome: str, result_summary: str | None = None, conclusion: str | None = None) -> None:
         disposition = {"success": "kept", "partial_success": "kept", "failure": "discarded", "inconclusive": "undecided"}.get(outcome, outcome)
-        self._send("finish", {"disposition": disposition, "result_summary": result_summary or "", "conclusion": conclusion or ""}, buffer=False)
-        self._finished = True
+        self._terminal("finish", {"disposition": disposition, "result_summary": result_summary or "", "conclusion": conclusion or ""})
 
     def abort(self, reason: str | None = None) -> None:
-        self._send("crash", {"error_summary": reason or "Run aborted"}, buffer=False)
-        self._finished = True
+        self._terminal("crash", {"error_summary": reason or "Run aborted"})
+
+    def _terminal(self, path: str, payload: dict[str, Any]) -> None:
+        if self._finished or not self.id:
+            return
+        flush_error: Exception | None = None
+        try:
+            self.client.flush()
+        except Exception as exc:
+            flush_error = exc
+        with self.client._lock:
+            pending = bool(self.client._buffer)
+        if pending:
+            self.client._defer_request("POST", f"/api/v1/runs/{self.id}/{path}", payload)
+            self._finished = True
+            if self.client.strict:
+                raise RuntimeError(f"RunTrace buffered the terminal {path} update behind pending evidence") from flush_error
+            return
+        if flush_error:
+            raise flush_error
+
+        request_id = str(uuid.uuid4())
+        result = self.client.request(
+            "POST",
+            f"/api/v1/runs/{self.id}/{path}",
+            payload,
+            buffer=True,
+            request_id=request_id,
+        )
+        queued = self.client._is_buffered(request_id)
+        if result is not None or queued:
+            self._finished = True
+        if self.client.strict and queued:
+            raise RuntimeError(f"RunTrace buffered the terminal {path} update")
 
 
 _default = RunTrace(

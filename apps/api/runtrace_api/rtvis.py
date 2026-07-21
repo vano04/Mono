@@ -158,7 +158,7 @@ def visualization_guide(saved_visualizations: list[dict[str, Any]] | None = None
         "existing_dashboard": {
             "built_ins": [
                 {"id": "autoresearch_progress", "location": "project dashboard", "description": "Interactive best-so-far percentage improvement over time with metric, window, and tag filters."},
-                {"id": "baseline_summary", "location": "project dashboard", "description": "Current baseline run, primary metric, connected worker count, and registry status."},
+                {"id": "baseline_summary", "location": "project dashboard", "description": "Current baseline run, primary metric, recorded worker count, and registry status."},
                 {"id": "experiment_queue", "location": "project dashboard", "description": "Shared proposed, claimed, and running experiment queue with lifecycle counts."},
                 {"id": "completed_history", "location": "project dashboard", "description": "Recent completed and crashed runs with branch, result, and disposition."},
                 {"id": "run_curve", "location": "run details", "description": "Interactive metric curve compared with the current baseline."},
@@ -172,7 +172,7 @@ def visualization_guide(saved_visualizations: list[dict[str, Any]] | None = None
         "supported_charts": ["line", "area", "bar", "scatter", "heatmap"],
         "dataset_sources": {
             "inline": {"description": "Portable rows embedded in the document", "max_rows": MAX_DATASET_ROWS},
-            "runtrace": {"queries": ["runs", "experiments"], "description": "Live project-scoped data resolved by RunTrace. Experiment result types use their separate guide and run_metrics query."},
+            "runtrace": {"queries": ["runs", "experiments", "run_metrics"], "description": "Live project-scoped data resolved by RunTrace. Dashboard run_metrics datasets require source_run_id; reusable experiment result types use their separate guide."},
         },
         "theme_tokens": ["background", "foreground", "card", "muted", "border", "primary", "chart-1", "chart-2", "chart-3", "chart-4", "chart-5"],
         "javascript_runtime": {

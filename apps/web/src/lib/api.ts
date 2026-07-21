@@ -30,7 +30,7 @@ export const runtrace = {
   createProject: (body: { name: string; slug: string; description: string; repository_url?: string }) =>
     api<Project>("/api/v1/projects", { method: "POST", body: JSON.stringify(body) }),
   deleteProject: (slug: string) => api<void>(`/api/v1/projects/${slug}`, { method: "DELETE" }),
-  dashboard: (slug: string) => api<Dashboard>(`/api/v1/projects/${slug}/dashboard`),
+  dashboard: (slug: string) => api<Dashboard>(`/api/v1/projects/${slug}/dashboard`, { cache: "no-store" }),
   progress: (slug: string, metric = "", window = "all", includeTags: string[] = [], excludeTags: string[] = []) => {
     const params = new URLSearchParams({ window })
     if (metric) params.set("metric", metric)

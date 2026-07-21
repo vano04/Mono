@@ -1,0 +1,12 @@
+services:
+  api:
+    image: runtrace-permission-qa-api:latest
+    build: !reset null
+    ports: !override
+      - "8100:8000"
+
+  web:
+    image: runtrace-permission-qa-web:latest
+    build: !reset null
+    ports: !override
+      - "3100:3000"

@@ -1,3 +1,9 @@
+from sqlalchemy import func, select
+
+from runtrace_api.database import SessionLocal
+from runtrace_api.models import AuditEvent
+
+
 def test_project_creation_initializes_context_and_lists_project(fresh_database):
     created = fresh_database.post("/api/v1/projects", json={"name": "Compiler Optimizer", "slug": "compiler-optimizer", "description": "Compile faster", "repository_url": "https://github.com/example/compiler-optimizer"})
     assert created.status_code == 201
@@ -28,12 +34,34 @@ def test_complete_experiment_and_run_lifecycle(fresh_database):
     assert claimed.json()["lifecycle"] == "pending"
     assert fresh_database.post(f"/api/v1/projects/dense-optimizer/experiments/{display_id}/claim", json={"worker_id": "other"}).status_code == 409
 
-    run = fresh_database.post("/api/v1/projects/dense-optimizer/runs", json={"name": "New cap run", "experiment_id": display_id, "configuration": {"total_steps": 2}})
+    hijacked = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/runs",
+        json={"name": "Wrong worker", "experiment_id": display_id, "worker_id": "other"},
+    )
+    assert hijacked.status_code == 409
+    assert fresh_database.post(
+        "/api/v1/projects/dense-optimizer/runs",
+        json={"name": "Missing worker", "experiment_id": display_id},
+    ).status_code == 409
+
+    run = fresh_database.post("/api/v1/projects/dense-optimizer/runs", json={"name": "New cap run", "experiment_id": display_id, "worker_id": "qa-worker", "configuration": {"total_steps": 2}})
     assert run.status_code == 201
     run_id = run.json()["id"]
     assert fresh_database.post(f"/api/v1/runs/{run_id}/parameters", json={"parameters": {"rank": 4}}).json()["accepted"] == 1
     assert fresh_database.post(f"/api/v1/runs/{run_id}/parameters", json={"parameters": {"rank": 8}}).json()["accepted"] == 1
-    assert fresh_database.post(f"/api/v1/runs/{run_id}/events", json={"message": "Started", "event_type": "status"}).status_code == 201
+    event_headers = {"X-Request-ID": "event-1"}
+    event = fresh_database.post(
+        f"/api/v1/runs/{run_id}/events",
+        json={"message": "Started", "event_type": "status"},
+        headers=event_headers,
+    )
+    event_replay = fresh_database.post(
+        f"/api/v1/runs/{run_id}/events",
+        json={"message": "Duplicate", "event_type": "status"},
+        headers=event_headers,
+    )
+    assert event.status_code == 201
+    assert event_replay.json() == event.json()
     first = fresh_database.post(f"/api/v1/runs/{run_id}/metrics", json={"metrics": [{"name": "score", "value": 2.0, "step": 1}]}, headers={"X-Request-ID": "metrics-1"})
     replay = fresh_database.post(f"/api/v1/runs/{run_id}/metrics", json={"metrics": [{"name": "score", "value": 99.0}]}, headers={"X-Request-ID": "metrics-1"})
     assert first.json()["accepted"] == 1
@@ -43,15 +71,93 @@ def test_complete_experiment_and_run_lifecycle(fresh_database):
     assert detail["metrics"]["score"]["latest"] == 2.0
     assert detail["events"][0]["message"] == "Started"
 
-    finished = fresh_database.post(f"/api/v1/runs/{run_id}/finish", json={"disposition": "kept", "result_summary": "score 2", "conclusion": "Keep it"})
+    finish_headers = {"X-Request-ID": "finish-scope-proof"}
+    finished = fresh_database.post(
+        f"/api/v1/runs/{run_id}/finish",
+        json={"disposition": "kept", "result_summary": "score 2", "conclusion": "Keep it"},
+        headers=finish_headers,
+    )
     assert finished.json()["lifecycle"] == "completed"
+    finish_replay = fresh_database.post(
+        f"/api/v1/runs/{run_id}/finish",
+        json={"disposition": "discarded", "result_summary": "must not replace", "conclusion": "must not replace"},
+        headers=finish_headers,
+    )
+    assert finish_replay.json()["result_summary"] == "score 2"
+    terminal_state = fresh_database.get(f"/api/v1/runs/{run_id}").json()
     assert fresh_database.post(f"/api/v1/runs/{run_id}/metrics", json={"metrics": [{"name": "score", "value": 3.0}]}).status_code == 409
+    terminal_metric_replay = fresh_database.post(
+        f"/api/v1/runs/{run_id}/metrics",
+        json={"metrics": [{"name": "score", "value": 99.0}]},
+        headers={"X-Request-ID": "metrics-1"},
+    )
+    assert terminal_metric_replay.json() == {"accepted": 0, "idempotent_replay": True}
+    assert fresh_database.post(f"/api/v1/runs/{run_id}/crash", json={"error_summary": "late crash report"}).status_code == 409
+    after_rejected_crash = fresh_database.get(f"/api/v1/runs/{run_id}").json()
+    for field in ("lifecycle", "disposition", "result_summary", "conclusion", "finished_at"):
+        assert after_rejected_crash[field] == terminal_state[field]
+
+    other_finished = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/runs",
+        json={"name": "Finish idempotency scope"},
+    ).json()
+    assert fresh_database.post(
+        f"/api/v1/runs/{other_finished['id']}/finish",
+        json={"disposition": "discarded", "result_summary": "separate finish", "conclusion": "separate run"},
+        headers=finish_headers,
+    ).status_code == 200
+    assert fresh_database.post(
+        f"/api/v1/runs/{other_finished['id']}/finish",
+        json={"disposition": "kept", "result_summary": "must not replace", "conclusion": "must not replace"},
+        headers=finish_headers,
+    ).json()["result_summary"] == "separate finish"
+    with SessionLocal() as session:
+        audit_count = session.scalar(select(func.count()).select_from(AuditEvent).where(
+            AuditEvent.action == "run.completed",
+            AuditEvent.request_id == "finish-scope-proof",
+        ))
+    assert audit_count == 2
+
+    other_run = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/runs",
+        json={"name": "Crash idempotency scope"},
+    ).json()
+    cross_run_metric = fresh_database.post(
+        f"/api/v1/runs/{other_run['id']}/metrics",
+        json={"metrics": [{"name": "score", "value": 7.0}]},
+        headers={"X-Request-ID": "metrics-1"},
+    )
+    assert cross_run_metric.json() == {"accepted": 1, "idempotent_replay": False}
+    cross_run_event = fresh_database.post(
+        f"/api/v1/runs/{other_run['id']}/events",
+        json={"message": "Separate run", "event_type": "status"},
+        headers=event_headers,
+    )
+    assert cross_run_event.status_code == 201
+    assert cross_run_event.json()["id"] != event.json()["id"]
+    idempotency_headers = {"X-Request-ID": "crash-scope-proof"}
+    assert fresh_database.post(
+        f"/api/v1/runs/{other_run['id']}/crash",
+        json={"error_summary": "synthetic failure"},
+        headers=idempotency_headers,
+    ).status_code == 200
+    assert fresh_database.post(
+        f"/api/v1/runs/{other_run['id']}/crash",
+        json={"error_summary": "synthetic failure"},
+        headers=idempotency_headers,
+    ).status_code == 200
+    assert fresh_database.post(
+        f"/api/v1/runs/{run_id}/crash",
+        json={"error_summary": "wrong run retry"},
+        headers=idempotency_headers,
+    ).status_code == 409
     assert fresh_database.get("/api/v1/projects/dense-optimizer/dashboard").status_code == 200
 
 
 def test_run_archive_restore_delete_and_crash(fresh_database):
     created = fresh_database.post("/api/v1/projects/dense-optimizer/runs", json={"name": "Crash test"}).json()
     run_id = created["id"]
+    assert fresh_database.delete(f"/api/v1/runs/{run_id}").status_code == 409
     crashed = fresh_database.post(f"/api/v1/runs/{run_id}/crash", json={"error_summary": "out of memory"})
     assert crashed.json()["lifecycle"] == "crashed"
     assert fresh_database.post(f"/api/v1/runs/{run_id}/archive").json()["archived_at"]
@@ -59,6 +165,20 @@ def test_run_archive_restore_delete_and_crash(fresh_database):
     assert fresh_database.post(f"/api/v1/runs/{run_id}/restore").json()["archived_at"] is None
     assert fresh_database.delete(f"/api/v1/runs/{run_id}").status_code == 204
     assert fresh_database.get(f"/api/v1/runs/{run_id}").status_code == 404
+
+
+def test_deleting_current_baseline_clears_project_reference(fresh_database):
+    context = fresh_database.get("/api/v1/projects/dense-optimizer/context").json()
+    assert context["baseline"]["id"] == "run_168"
+
+    assert fresh_database.delete("/api/v1/runs/RUN-168").status_code == 204
+
+    context = fresh_database.get("/api/v1/projects/dense-optimizer/context")
+    dashboard = fresh_database.get("/api/v1/projects/dense-optimizer/dashboard")
+    assert context.status_code == 200
+    assert dashboard.status_code == 200
+    assert context.json()["baseline"] is None
+    assert dashboard.json()["baseline"] is None
 
 
 def test_artifact_validation_search_variants_and_settings(fresh_database):
@@ -171,3 +291,19 @@ def test_run_stream_can_resume_after_known_metric_and_event_ids(fresh_database):
     assert "event: metric" not in response.text
     assert "event: event" not in response.text
     assert "event: status" in response.text
+
+
+def test_run_stream_rejects_ambiguous_cross_project_display_id(fresh_database):
+    first = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/runs",
+        json={"name": "Dense duplicate display"},
+    ).json()
+    second = fresh_database.post(
+        "/api/v1/projects/flash-attention-kernel/runs",
+        json={"name": "Flash duplicate display"},
+    ).json()
+    assert first["display_id"] == second["display_id"]
+
+    response = fresh_database.get(f"/api/v1/runs/{first['display_id']}/stream")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Run display ID is ambiguous; use the full run ID"

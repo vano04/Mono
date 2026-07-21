@@ -22,15 +22,18 @@ from runtrace_mcp import server
         (server.list_visualizations, ("dense-optimizer",), ("GET", "/api/v1/projects/dense-optimizer/visualizations", None)),
         (server.get_visualization, ("dense-optimizer", "vis_1"), ("GET", "/api/v1/projects/dense-optimizer/visualizations/vis_1", None)),
         (server.preview_visualization, ("dense-optimizer", {"version": 1}), ("POST", "/api/v1/projects/dense-optimizer/visualizations/preview", {"version": 1})),
+        (server.preview_visualization, ("dense-optimizer", {"version": 1}, "RUN/168"), ("POST", "/api/v1/projects/dense-optimizer/visualizations/preview?source_run_id=RUN%2F168", {"version": 1})),
         (server.generate_visualization, ("dense-optimizer", "Loss", {"version": 1}, "A chart", None), ("POST", "/api/v1/projects/dense-optimizer/visualizations", {"name": "Loss", "description": "A chart", "spec": {"version": 1}, "created_by": "agent"})),
         (server.update_visualization, ("dense-optimizer", "vis_1", {"version": 1}, "Loss v2", None, False, 2), ("PATCH", "/api/v1/projects/dense-optimizer/visualizations/vis_1", {"spec": {"version": 1}, "name": "Loss v2", "visible": False, "sort_order": 2})),
+        (server.update_visualization, ("dense-optimizer", "vis_1", None, None, None, None, None, "run_168", False), ("PATCH", "/api/v1/projects/dense-optimizer/visualizations/vis_1", {"source_run_id": "run_168"})),
+        (server.update_visualization, ("dense-optimizer", "vis_1", None, None, None, None, None, None, True), ("PATCH", "/api/v1/projects/dense-optimizer/visualizations/vis_1", {"source_run_id": None})),
         (server.delete_visualization, ("dense-optimizer", "vis_1"), ("DELETE", "/api/v1/projects/dense-optimizer/visualizations/vis_1", None)),
         (server.export_visualization, ("dense-optimizer", "vis_1"), ("GET", "/api/v1/projects/dense-optimizer/visualizations/vis_1/export", None)),
         (server.import_visualization, ("dense-optimizer", {"format": "runtrace-visualization"}, None), ("POST", "/api/v1/projects/dense-optimizer/visualizations/import", {"document": {"format": "runtrace-visualization"}, "created_by": "agent"})),
         (server.propose_experiment, ("dense-optimizer", "Test cap", "Caps help", "Prior evidence", "Add flag", "gpt", "scalar"), ("POST", "/api/v1/projects/dense-optimizer/experiments", {"title": "Test cap", "hypothesis": "Caps help", "reasoning": "Prior evidence", "implementation_details": "Add flag", "source": "agent", "source_model": "gpt", "metric_mode": "scalar"})),
         (server.claim_experiment, ("dense-optimizer", "worker-1", None), ("POST", "/api/v1/projects/dense-optimizer/experiments/claim", {"worker_id": "worker-1"})),
         (server.claim_experiment, ("dense-optimizer", "worker-1", "EXP-021"), ("POST", "/api/v1/projects/dense-optimizer/experiments/EXP-021/claim", {"worker_id": "worker-1"})),
-        (server.create_run, ("dense-optimizer", "Retry", "Faster", "Because", "EXP-021", [{"run_id": "RUN-168"}], "Used evidence", {"steps": 2}), ("POST", "/api/v1/projects/dense-optimizer/runs", {"name": "Retry", "hypothesis": "Faster", "reasoning": "Because", "experiment_id": "EXP-021", "evidence_used": [{"run_id": "RUN-168"}], "decision_changed": "Used evidence", "configuration": {"steps": 2}})),
+        (server.create_run, ("dense-optimizer", "Retry", "Faster", "Because", "EXP-021", [{"run_id": "RUN-168"}], "Used evidence", {"steps": 2}, None, "worker-1", "Changed cap", "abc123"), ("POST", "/api/v1/projects/dense-optimizer/runs", {"name": "Retry", "hypothesis": "Faster", "reasoning": "Because", "experiment_id": "EXP-021", "evidence_used": [{"run_id": "RUN-168"}], "decision_changed": "Used evidence", "configuration": {"steps": 2}, "worker_id": "worker-1", "change_summary": "Changed cap", "git_commit": "abc123"})),
         (server.log_metric, ("RUN-174", "loss", 3.2, 10), ("POST", "/api/v1/runs/RUN-174/metrics", {"metrics": [{"name": "loss", "value": 3.2, "step": 10}]})),
         (server.log_metrics, ("RUN-174", [{"name": "loss", "value": 3.2, "step": 10}, {"name": "time", "value": 4.1}]), ("POST", "/api/v1/runs/RUN-174/metrics", {"metrics": [{"name": "loss", "value": 3.2, "step": 10}, {"name": "time", "value": 4.1}]})),
         (server.log_event, ("RUN-174", "Checkpoint", "warning", "checkpoint"), ("POST", "/api/v1/runs/RUN-174/events", {"message": "Checkpoint", "level": "warning", "event_type": "checkpoint"})),
@@ -49,6 +52,16 @@ def test_every_mcp_tool_uses_the_expected_api_contract(monkeypatch, tool, args, 
     monkeypatch.setattr(server, "request", fake_request)
     assert tool(*args) == {"ok": True}
     assert calls == [expected]
+
+
+def test_visualization_source_update_rejects_conflicting_instructions():
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        server.update_visualization(
+            "dense-optimizer",
+            "vis_1",
+            source_run_id="run_168",
+            clear_source_run=True,
+        )
 
 
 def test_mcp_http_errors_are_not_silenced(monkeypatch):

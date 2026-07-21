@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 import json
 import re
 import shutil
@@ -20,7 +21,7 @@ from sqlalchemy import and_, delete, desc, func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from .config import ROOT, settings
-from .auth import apply_owner_recovery_password, authenticate_request, router as auth_router
+from .auth import AuthPrincipal, apply_owner_recovery_password, authenticate_request, router as auth_router
 from .database import SessionLocal, get_db
 from .embeddings import index_document, semantic_matches
 from .models import (
@@ -170,42 +171,60 @@ async def demo_claim_loop() -> None:
         await asyncio.sleep(max(10, settings.claim_timeout_seconds // 3))
 
 
-def get_project(session: Session, identifier: str) -> Project:
-    project = session.scalar(
-        select(Project).where(
-            or_(Project.id == identifier, func.lower(Project.slug) == identifier.lower())
-        )
+def get_project(session: Session, identifier: str, *, for_update: bool = False) -> Project:
+    query = select(Project).where(
+        or_(Project.id == identifier, func.lower(Project.slug) == identifier.lower())
     )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    project = session.scalar(query)
     if not project:
         raise HTTPException(404, "Project not found")
     return project
 
 
-def get_experiment(session: Session, project: Project, identifier: str, include_deleted: bool = False) -> Experiment:
+def project_access_role(session: Session, project_id: str, principal: AuthPrincipal) -> str:
+    if principal.dev or principal.role in {"owner", "admin"}:
+        return "owner"
+    return session.scalar(select(ProjectMembership.role).where(
+        ProjectMembership.project_id == project_id,
+        ProjectMembership.identity_id == principal.id,
+    )) or "viewer"
+
+
+def get_experiment(session: Session, project: Project, identifier: str, include_deleted: bool = False, *, for_update: bool = False) -> Experiment:
     query = select(Experiment).where(
         Experiment.project_id == project.id,
         or_(Experiment.id == identifier, Experiment.display_id == identifier),
     )
     if not include_deleted:
         query = query.where(Experiment.deleted_at.is_(None))
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
     item = session.scalar(query)
     if not item:
         raise HTTPException(404, "Experiment not found")
     return item
 
 
-def get_run(session: Session, identifier: str) -> Run:
-    item = session.scalar(
+def get_run(session: Session, identifier: str, *, for_update: bool = False) -> Run:
+    exact_query = (
         select(Run)
         .options(selectinload(Run.metrics), selectinload(Run.events), selectinload(Run.parameters), selectinload(Run.artifacts))
         .where(Run.id == identifier, Run.deleted_at.is_(None))
     )
+    if for_update:
+        exact_query = exact_query.with_for_update().execution_options(populate_existing=True)
+    item = session.scalar(exact_query)
     if not item:
-        matches = session.scalars(
+        display_query = (
             select(Run)
             .options(selectinload(Run.metrics), selectinload(Run.events), selectinload(Run.parameters), selectinload(Run.artifacts))
             .where(Run.display_id == identifier, Run.deleted_at.is_(None))
-        ).all()
+        )
+        if for_update:
+            display_query = display_query.with_for_update().execution_options(populate_existing=True)
+        matches = session.scalars(display_query).all()
         if len(matches) > 1:
             raise HTTPException(409, "Run display ID is ambiguous; use the full run ID")
         item = matches[0] if matches else None
@@ -222,7 +241,12 @@ def next_display_id(session: Session, project_id: str, model: type[Experiment] |
 
 
 def audit(session: Session, project_id: str, action: str, subject_type: str, subject_id: str, actor: str, request_id: str | None, payload: dict | None = None) -> None:
-    if request_id and session.scalar(select(AuditEvent.id).where(AuditEvent.request_id == request_id, AuditEvent.action == action)):
+    if request_id and session.scalar(select(AuditEvent.id).where(
+        AuditEvent.request_id == request_id,
+        AuditEvent.action == action,
+        AuditEvent.subject_type == subject_type,
+        AuditEvent.subject_id == subject_id,
+    )):
         return
     session.add(AuditEvent(project_id=project_id, action=action, subject_type=subject_type, subject_id=subject_id, actor=actor, request_id=request_id, payload=payload or {}))
 
@@ -246,6 +270,7 @@ def requeue_expired_claims(session: Session, project_id: str | None = None) -> i
     )
     if project_id:
         query = query.where(Experiment.project_id == project_id)
+    query = query.with_for_update(skip_locked=True)
     expired = list(session.scalars(query))
     for item in expired:
         previous_worker = item.claimed_by
@@ -536,7 +561,8 @@ def visualization_payload(session: Session, project: Project, item: Visualizatio
         "updated_at": item.updated_at,
     }
     if resolve:
-        payload["resolved_datasets"] = resolve_visualization_datasets(session, project, item.spec)
+        source_run = get_run(session, item.source_run_id) if item.source_run_id else None
+        payload["resolved_datasets"] = resolve_visualization_datasets(session, project, item.spec, source_run=source_run)
     return payload
 
 
@@ -582,12 +608,14 @@ def health() -> dict[str, str]:
 
 @app.post("/api/v1/projects", response_model=ProjectRead, status_code=201)
 def create_project(body: ProjectCreate, request: Request, session: Session = Depends(get_db)) -> Project:
+    principal = request.state.identity
+    if principal.token_project_ids is not None:
+        raise HTTPException(403, "API tokens cannot create projects outside their fixed project grants")
     if session.scalar(select(Project.id).where(Project.slug == body.slug)):
         raise HTTPException(409, "Project slug already exists")
     project = Project(**body.model_dump())
     session.add(project)
     session.flush()
-    principal = request.state.identity
     if not principal.dev:
         session.add(ProjectMembership(project_id=project.id, identity_id=principal.id, role="owner"))
     session.add_all([
@@ -751,10 +779,23 @@ def delete_result_visualization(project: str, key: str, session: Session = Depen
 
 
 @app.post("/api/v1/projects/{project}/visualizations/preview")
-def preview_visualization(project: str, spec: RTVisSpec, session: Session = Depends(get_db)) -> dict:
+def preview_visualization(
+    project: str,
+    spec: RTVisSpec,
+    source_run_id: str | None = Query(default=None),
+    session: Session = Depends(get_db),
+) -> dict:
     current = get_project(session, project)
     document = normalized_spec(spec)
-    return {"valid": True, "spec": document, "resolved_datasets": resolve_visualization_datasets(session, current, document)}
+    source_run = get_run(session, source_run_id) if source_run_id else None
+    if source_run and source_run.project_id != current.id:
+        raise HTTPException(409, "Source run must belong to this project")
+    return {
+        "valid": True,
+        "spec": document,
+        "source_run_id": source_run.id if source_run else None,
+        "resolved_datasets": resolve_visualization_datasets(session, current, document, source_run=source_run),
+    }
 
 
 @app.get("/api/v1/projects/{project}/visualizations")
@@ -774,15 +815,17 @@ def create_visualization(project: str, body: VisualizationCreate, session: Sessi
         raise HTTPException(409, "A visualization with this name already exists")
     source_run = None
     if body.source_run_id:
-        source_run = get_run(session, body.source_run_id)
+        source_run = get_run(session, body.source_run_id, for_update=True)
         if source_run.project_id != current.id:
             raise HTTPException(409, "Source run must belong to this project")
+    document = normalized_spec(body.spec)
+    resolve_visualization_datasets(session, current, document, source_run=source_run)
     item = Visualization(
         project_id=current.id,
         name=name,
         description=body.description.strip(),
         spec_version=body.spec.version,
-        spec=normalized_spec(body.spec),
+        spec=document,
         visible=body.visible,
         sort_order=body.sort_order,
         source_run_id=source_run.id if source_run else None,
@@ -824,10 +867,13 @@ def update_visualization(project: str, visualization_id: str, body: Visualizatio
     if "source_run_id" in body.model_fields_set:
         source_run = None
         if body.source_run_id:
-            source_run = get_run(session, body.source_run_id)
+            source_run = get_run(session, body.source_run_id, for_update=True)
             if source_run.project_id != current.id:
                 raise HTTPException(409, "Source run must belong to this project")
         item.source_run_id = source_run.id if source_run else None
+    else:
+        source_run = get_run(session, item.source_run_id, for_update=True) if item.source_run_id else None
+    resolve_visualization_datasets(session, current, item.spec, source_run=source_run)
     item.revision += 1
     audit(session, current.id, "visualization.updated", "visualization", item.id, "human", None, {"name": item.name, "revision": item.revision})
     session.commit()
@@ -848,10 +894,17 @@ def delete_visualization(project: str, visualization_id: str, session: Session =
 def export_visualization(project: str, visualization_id: str, session: Session = Depends(get_db)) -> dict:
     current = get_project(session, project)
     item = get_visualization(session, current, visualization_id)
+    portable_spec = deepcopy(item.spec)
+    if item.source_run_id:
+        source_run = get_run(session, item.source_run_id)
+        resolved = resolve_visualization_datasets(session, current, portable_spec, source_run=source_run)
+        for name, dataset in portable_spec.get("datasets", {}).items():
+            if dataset.get("source") == "runtrace" and dataset.get("query") == "run_metrics":
+                portable_spec["datasets"][name] = {"source": "inline", "rows": resolved[name]}
     return {
         "format": "runtrace-visualization",
         "version": 1,
-        "visualization": {"name": item.name, "description": item.description, "spec": item.spec},
+        "visualization": {"name": item.name, "description": item.description, "spec": portable_spec},
     }
 
 
@@ -879,6 +932,7 @@ def import_visualization(project: str, body: VisualizationImport, session: Sessi
         spec=normalized_spec(spec),
         created_by=body.created_by.strip(),
     )
+    resolve_visualization_datasets(session, current, item.spec)
     session.add(item)
     session.flush()
     audit(session, current.id, "visualization.imported", "visualization", item.id, body.created_by, None, {"name": item.name, "spec_version": item.spec_version})
@@ -965,7 +1019,7 @@ def list_experiments(
 
 @app.post("/api/v1/projects/{project}/experiments", response_model=ExperimentRead, status_code=201)
 def create_experiment(project: str, body: ExperimentCreate, x_request_id: str | None = Header(None), session: Session = Depends(get_db)) -> Experiment:
-    current = get_project(session, project)
+    current = get_project(session, project, for_update=True)
     validate_result_type(session, current, body.metric_mode)
     item = Experiment(project_id=current.id, display_id=next_display_id(session, current.id, Experiment, "EXP"), **body.model_dump())
     session.add(item)
@@ -1060,7 +1114,7 @@ def claim_experiment(project: str, identifier: str, body: ClaimRequest, session:
 @app.post("/api/v1/projects/{project}/experiments/{identifier}/release", response_model=ExperimentRead)
 def release_experiment(project: str, identifier: str, body: ClaimRequest, session: Session = Depends(get_db)) -> Experiment:
     current = get_project(session, project)
-    item = get_experiment(session, current, identifier)
+    item = get_experiment(session, current, identifier, for_update=True)
     if item.lifecycle != "pending":
         raise HTTPException(409, "Only pending experiments can be released")
     if item.claimed_by and item.claimed_by != body.worker_id:
@@ -1143,14 +1197,16 @@ def update_exclusions(project: str, body: ExclusionsUpdate, session: Session = D
 
 @app.post("/api/v1/projects/{project}/runs", status_code=201)
 def create_run(project: str, body: RunCreate, x_actor: str = Header("agent"), x_request_id: str | None = Header(None), session: Session = Depends(get_db)) -> dict:
-    current = get_project(session, project)
+    current = get_project(session, project, for_update=True)
     experiment = None
     if body.experiment_id:
-        experiment = get_experiment(session, current, body.experiment_id)
+        experiment = get_experiment(session, current, body.experiment_id, for_update=True)
         if experiment.lifecycle not in {"pending", "proposed"}:
             raise HTTPException(409, "Experiment cannot be started from its current lifecycle")
+        if experiment.lifecycle == "pending" and body.worker_id != experiment.claimed_by:
+            raise HTTPException(409, "Experiment is claimed by another worker")
         experiment.lifecycle = "running"
-    values = body.model_dump()
+    values = body.model_dump(exclude={"worker_id"})
     if experiment and "metric_mode" not in body.model_fields_set:
         values["metric_mode"] = experiment.metric_mode
     validate_result_type(session, current, values["metric_mode"])
@@ -1161,7 +1217,7 @@ def create_run(project: str, body: RunCreate, x_actor: str = Header("agent"), x_
     session.flush()
     register_tags(session, current, _normalise_tags(body.configuration.get("tags")))
     index_document(session, item)
-    audit(session, current.id, "run.started", "run", item.id, x_actor, x_request_id, {"display_id": item.display_id})
+    audit(session, current.id, "run.started", "run", item.id, body.worker_id or x_actor, x_request_id, {"display_id": item.display_id})
     session.commit()
     return run_payload(get_run(session, item.id), detail=True)
 
@@ -1197,9 +1253,18 @@ def restore_run(identifier: str, x_actor: str = Header("human"), x_request_id: s
 
 @app.delete("/api/v1/runs/{identifier}", status_code=204)
 def delete_run(identifier: str, x_actor: str = Header("human"), x_request_id: str | None = Header(None), session: Session = Depends(get_db)) -> None:
-    run = get_run(session, identifier)
+    candidate = get_run(session, identifier)
+    project = get_project(session, candidate.project_id, for_update=True)
+    run = get_run(session, candidate.id, for_update=True)
+    if run.lifecycle == "running":
+        raise HTTPException(409, "A running run must finish or crash before deletion")
+    if session.scalar(select(Visualization.id).where(Visualization.source_run_id == run.id).limit(1)):
+        raise HTTPException(409, "Run is used as a visualization data source")
+    cleared_baseline = project.current_baseline_run_id == run.id
+    if cleared_baseline:
+        project.current_baseline_run_id = None
     run.deleted_at = now_utc()
-    audit(session, run.project_id, "run.deleted", "run", run.id, x_actor, x_request_id)
+    audit(session, run.project_id, "run.deleted", "run", run.id, x_actor, x_request_id, {"cleared_baseline": cleared_baseline})
     session.commit()
 
 
@@ -1214,11 +1279,16 @@ def read_run(identifier: str, session: Session = Depends(get_db)) -> dict:
 
 @app.post("/api/v1/runs/{identifier}/metrics", status_code=202)
 def log_metrics(identifier: str, body: MetricBatch, x_request_id: str | None = Header(None), session: Session = Depends(get_db)) -> dict:
-    run = get_run(session, identifier)
+    run = get_run(session, identifier, for_update=True)
+    if x_request_id and session.scalar(select(AuditEvent.id).where(
+        AuditEvent.request_id == x_request_id,
+        AuditEvent.action == "run.metrics_logged",
+        AuditEvent.subject_type == "run",
+        AuditEvent.subject_id == run.id,
+    )):
+        return {"accepted": 0, "idempotent_replay": True}
     if run.lifecycle != "running":
         raise HTTPException(409, "Metrics can only be appended to a running run")
-    if x_request_id and session.scalar(select(AuditEvent.id).where(AuditEvent.request_id == x_request_id, AuditEvent.action == "run.metrics_logged")):
-        return {"accepted": 0, "idempotent_replay": True}
     for point in body.metrics:
         session.add(RunMetric(run_id=run.id, name=point.name, value=point.value, step=point.step, timestamp=point.timestamp or now_utc(), context=point.context))
     audit(session, run.project_id, "run.metrics_logged", "run", run.id, "agent", x_request_id, {"count": len(body.metrics)})
@@ -1227,10 +1297,25 @@ def log_metrics(identifier: str, body: MetricBatch, x_request_id: str | None = H
 
 
 @app.post("/api/v1/runs/{identifier}/events", status_code=201)
-def log_event(identifier: str, body: EventCreate, session: Session = Depends(get_db)) -> dict:
-    run = get_run(session, identifier)
+def log_event(identifier: str, body: EventCreate, x_request_id: str | None = Header(None), session: Session = Depends(get_db)) -> dict:
+    run = get_run(session, identifier, for_update=True)
+    if x_request_id:
+        replay = session.scalar(select(AuditEvent).where(
+            AuditEvent.request_id == x_request_id,
+            AuditEvent.action == "run.event_logged",
+            AuditEvent.subject_type == "run",
+            AuditEvent.subject_id == run.id,
+        ))
+        if replay:
+            event = session.get(RunEvent, replay.payload.get("event_id"))
+            if not event:
+                raise HTTPException(409, "Idempotent event record is unavailable")
+            return {"id": event.id, "message": event.message, "level": event.level, "event_type": event.event_type, "metadata": event.metadata_json, "timestamp": event.timestamp}
     event = RunEvent(run_id=run.id, message=body.message, level=body.level, event_type=body.event_type, metadata_json=body.metadata, timestamp=body.timestamp or now_utc())
     session.add(event)
+    session.flush()
+    if x_request_id:
+        audit(session, run.project_id, "run.event_logged", "run", run.id, "agent", x_request_id, {"event_id": event.id})
     session.commit()
     session.refresh(event)
     return {"id": event.id, "message": event.message, "level": event.level, "event_type": event.event_type, "metadata": event.metadata_json, "timestamp": event.timestamp}
@@ -1238,7 +1323,7 @@ def log_event(identifier: str, body: EventCreate, session: Session = Depends(get
 
 @app.post("/api/v1/runs/{identifier}/parameters", status_code=202)
 def log_parameters(identifier: str, body: ParameterBatch, session: Session = Depends(get_db)) -> dict:
-    run = get_run(session, identifier)
+    run = get_run(session, identifier, for_update=True)
     for name, value in body.parameters.items():
         existing = session.scalar(select(RunParameter).where(RunParameter.run_id == run.id, RunParameter.name == name))
         if existing:
@@ -1253,9 +1338,14 @@ def log_parameters(identifier: str, body: ParameterBatch, session: Session = Dep
 
 @app.post("/api/v1/runs/{identifier}/finish")
 def finish_run(identifier: str, body: RunFinish, x_actor: str = Header("agent"), x_request_id: str | None = Header(None), session: Session = Depends(get_db)) -> dict:
-    run = get_run(session, identifier)
+    run = get_run(session, identifier, for_update=True)
     if run.lifecycle != "running":
-        if x_request_id and session.scalar(select(AuditEvent.id).where(AuditEvent.request_id == x_request_id, AuditEvent.action == "run.completed")):
+        if x_request_id and session.scalar(select(AuditEvent.id).where(
+            AuditEvent.request_id == x_request_id,
+            AuditEvent.action == "run.completed",
+            AuditEvent.subject_type == "run",
+            AuditEvent.subject_id == run.id,
+        )):
             return run_payload(run, detail=True)
         raise HTTPException(409, "Run is not running")
     run.lifecycle = "completed"
@@ -1275,7 +1365,16 @@ def finish_run(identifier: str, body: RunFinish, x_actor: str = Header("agent"),
 
 @app.post("/api/v1/runs/{identifier}/crash")
 def crash_run(identifier: str, body: RunCrash, x_actor: str = Header("agent"), x_request_id: str | None = Header(None), session: Session = Depends(get_db)) -> dict:
-    run = get_run(session, identifier)
+    run = get_run(session, identifier, for_update=True)
+    if run.lifecycle != "running":
+        if x_request_id and session.scalar(select(AuditEvent.id).where(
+            AuditEvent.request_id == x_request_id,
+            AuditEvent.action == "run.crashed",
+            AuditEvent.subject_type == "run",
+            AuditEvent.subject_id == run.id,
+        )):
+            return run_payload(run, detail=True)
+        raise HTTPException(409, "Run is not running")
     run.lifecycle = "crashed"
     run.disposition = "undecided"
     run.result_summary = body.error_summary
@@ -1291,8 +1390,8 @@ def crash_run(identifier: str, body: RunCrash, x_actor: str = Header("agent"), x
 
 @app.post("/api/v1/projects/{project}/baseline")
 def set_baseline(project: str, body: BaselineUpdate, session: Session = Depends(get_db)) -> dict:
-    current = get_project(session, project)
-    run = get_run(session, body.run_id)
+    current = get_project(session, project, for_update=True)
+    run = get_run(session, body.run_id, for_update=True)
     if run.project_id != current.id or run.lifecycle != "completed":
         raise HTTPException(409, "Baseline must be a completed run in this project")
     previous = current.current_baseline_run_id
@@ -1510,7 +1609,7 @@ def progress(project: str, metric: str | None = None, window: str = "all", inclu
 
 
 @app.get("/api/v1/projects/{project}/dashboard")
-def dashboard(project: str, session: Session = Depends(get_db)) -> dict:
+def dashboard(project: str, request: Request, session: Session = Depends(get_db)) -> dict:
     current = get_project(session, project)
     requeue_expired_claims(session, current.id)
     experiments = session.scalars(select(Experiment).where(Experiment.project_id == current.id, Experiment.deleted_at.is_(None)).order_by(Experiment.priority)).all()
@@ -1535,6 +1634,7 @@ def dashboard(project: str, session: Session = Depends(get_db)) -> dict:
         select(Visualization).where(Visualization.project_id == current.id).order_by(Visualization.sort_order, Visualization.created_at)
     ).all()
     return {
+        "access_role": project_access_role(session, current.id, request.state.identity),
         "project": ProjectRead.model_validate(current).model_dump(),
         "experiments": [ExperimentRead.model_validate(item).model_dump() for item in active_experiments],
         "archived": [ExperimentRead.model_validate(item).model_dump() for item in archived] + [run_payload(item, detail=True) for item in archived_runs],
@@ -1555,12 +1655,15 @@ def dashboard(project: str, session: Session = Depends(get_db)) -> dict:
 
 @app.get("/api/v1/runs/{identifier}/stream")
 async def stream_run(identifier: str, after_metric_id: int = 0, after_event_id: int = 0):
+    with SessionLocal() as session:
+        run_id = get_run(session, identifier).id
+
     async def events():
         last_metric_id = after_metric_id
         last_event_id = after_event_id
         while True:
             with SessionLocal() as session:
-                run = session.scalar(select(Run).where(or_(Run.id == identifier, Run.display_id == identifier)))
+                run = session.get(Run, run_id)
                 if not run:
                     yield "event: error\ndata: {\"message\":\"Run not found\"}\n\n"
                     return

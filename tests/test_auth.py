@@ -15,6 +15,9 @@ def test_dev_mode_bypasses_authentication(fresh_database):
     assert status.json()["dev"] is True
     assert status.json()["identity"]["role"] == "owner"
     assert fresh_database.get("/api/v1/projects").status_code == 200
+    token = fresh_database.post("/api/v1/auth/tokens", json={"name": "Unavailable in dev mode"})
+    assert token.status_code == 409
+    assert token.json()["detail"] == "API tokens are not managed in development mode"
 
 
 def test_normal_mode_requires_bootstrap_then_a_session(fresh_database, monkeypatch):
@@ -95,6 +98,16 @@ def test_owner_recovery_password_initializes_legacy_owner(fresh_database, monkey
         session.commit()
         apply_owner_recovery_password(session)
         assert owner.password_hash
+        session.add(AuthSession(
+            identity_id=owner.id,
+            token_hash=hashlib.sha256(b"stale-owner-session").hexdigest(),
+            expires_at=now_utc() + timedelta(hours=1),
+        ))
+        owner.status = "suspended"
+        session.commit()
+        apply_owner_recovery_password(session)
+        assert owner.status == "active"
+        assert session.scalar(select(AuthSession).where(AuthSession.identity_id == owner.id)) is None
 
     assert fresh_database.post("/api/v1/auth/login", json={
         "username": "owner",
@@ -190,13 +203,29 @@ def test_api_token_authentication_and_revocation(fresh_database, monkeypatch):
     fresh_database.cookies.clear()
     headers = {"Authorization": f"Bearer {secret}"}
     assert fresh_database.get("/api/v1/projects", headers=headers).status_code == 200
+    changed = fresh_database.post(
+        "/api/v1/auth/password",
+        json={"current_password": "irrelevant", "new_password": "bearer must not set this"},
+        headers=headers,
+    )
+    assert changed.status_code == 403
+    assert "set-cookie" not in changed.headers
+    assert fresh_database.patch(
+        "/api/v1/auth/preferences", json={"locale": "fr"}, headers=headers
+    ).status_code == 403
+    assert fresh_database.post("/api/v1/auth/onboarding/complete", headers=headers).status_code == 403
     with SessionLocal() as session:
         stored = session.get(ApiToken, token_id)
         assert stored is not None
         assert stored.token_hash != secret
         assert stored.last_used_at is not None
+        assert session.scalar(select(Identity).where(Identity.username == "owner")).password_hash is None
 
-    assert fresh_database.delete(f"/api/v1/auth/tokens/{token_id}", headers=headers).status_code == 204
+    assert fresh_database.get("/api/v1/auth/tokens", headers=headers).status_code == 403
+    assert fresh_database.delete(f"/api/v1/auth/tokens/{token_id}", headers=headers).status_code == 403
+    fresh_database.cookies.set("runtrace_session", raw_session)
+    assert fresh_database.delete(f"/api/v1/auth/tokens/{token_id}").status_code == 204
+    fresh_database.cookies.clear()
     assert fresh_database.get("/api/v1/projects", headers=headers).status_code == 401
 
 
@@ -222,20 +251,53 @@ def test_project_memberships_scoped_tokens_and_admin_token_control(fresh_databas
     granted = fresh_database.post("/api/v1/auth/projects/first/members", json={"identity_id": member_id, "role": "viewer"})
     assert granted.status_code == 201
     assert granted.json()["role"] == "viewer"
+    assert fresh_database.get("/api/v1/projects/first/dashboard").json()["access_role"] == "owner"
 
     fresh_database.cookies.clear()
     fresh_database.cookies.set("runtrace_session", member_session)
     assert {project["id"] for project in fresh_database.get("/api/v1/projects").json()} == {first["id"]}
     assert fresh_database.get("/api/v1/projects/first").status_code == 200
+    assert fresh_database.get("/api/v1/projects/first/dashboard").json()["access_role"] == "viewer"
     assert fresh_database.get("/api/v1/projects/second").status_code == 403
     assert fresh_database.post("/api/v1/projects/first/experiments", json={"title": "No", "hypothesis": "viewer"}).status_code == 403
 
     fresh_database.cookies.clear()
     fresh_database.cookies.set("runtrace_session", owner_session)
     assert fresh_database.patch(f"/api/v1/auth/projects/first/members/{member_id}", json={"role": "editor"}).status_code == 200
+    owner_token = fresh_database.post(
+        "/api/v1/auth/tokens",
+        json={"name": "Owner first only", "project_ids": [first["id"]]},
+    )
+    assert owner_token.status_code == 201
+    owner_token_headers = {"Authorization": f"Bearer {owner_token.json()['token']}"}
 
     fresh_database.cookies.clear()
+    assert fresh_database.get("/api/v1/auth/projects/first/members", headers=owner_token_headers).status_code == 200
+    assert fresh_database.get("/api/v1/auth/projects/second/members", headers=owner_token_headers).status_code == 403
+    assert fresh_database.post(
+        "/api/v1/search",
+        json={"project": "first", "query": ""},
+        headers=owner_token_headers,
+    ).status_code == 200
+    assert fresh_database.post(
+        "/api/v1/search",
+        json={"project": "second", "query": ""},
+        headers=owner_token_headers,
+    ).status_code == 403
+    assert fresh_database.post(
+        "/api/v1/projects",
+        json={"name": "Outside grant", "slug": "outside-grant"},
+        headers=owner_token_headers,
+    ).status_code == 403
+    assert fresh_database.post(
+        "/api/v1/auth/tokens",
+        json={"name": "Expanded grant", "project_ids": [second["id"]]},
+        headers=owner_token_headers,
+    ).status_code == 403
+    assert fresh_database.get("/api/v1/auth/identities", headers=owner_token_headers).status_code == 403
+
     fresh_database.cookies.set("runtrace_session", member_session)
+    assert fresh_database.get("/api/v1/projects/first/dashboard").json()["access_role"] == "editor"
     assert fresh_database.post("/api/v1/projects/first/experiments", json={"title": "Allowed", "hypothesis": "editor"}).status_code == 201
     created = fresh_database.post("/api/v1/auth/tokens", json={"name": "First only", "project_ids": [first["id"]]})
     assert created.status_code == 201
@@ -247,6 +309,13 @@ def test_project_memberships_scoped_tokens_and_admin_token_control(fresh_databas
     headers = {"Authorization": f"Bearer {secret}"}
     assert fresh_database.get("/api/v1/projects/first", headers=headers).status_code == 200
     assert fresh_database.get("/api/v1/projects/second", headers=headers).status_code == 403
+    assert fresh_database.post(
+        "/api/v1/auth/tokens",
+        json={"name": "Member expanded grant", "project_ids": [second["id"]]},
+        headers=headers,
+    ).status_code == 403
+    assert fresh_database.get("/api/v1/auth/tokens", headers=owner_token_headers).status_code == 403
+    assert fresh_database.delete(f"/api/v1/auth/tokens/{token_id}", headers=owner_token_headers).status_code == 403
 
     fresh_database.cookies.set("runtrace_session", owner_session)
     all_tokens = fresh_database.get("/api/v1/auth/tokens").json()

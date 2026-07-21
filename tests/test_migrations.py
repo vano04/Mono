@@ -1,11 +1,14 @@
 import sqlite3
 from datetime import datetime, timezone
+from importlib import import_module
 from pathlib import Path
+from types import SimpleNamespace
 
 from alembic import command
 from alembic.config import Config
 
 from runtrace_api.config import ROOT, settings
+from runtrace_api.models import SearchDocument
 
 
 def test_existing_native_database_is_upgraded_to_current_schema(monkeypatch, tmp_path):
@@ -41,7 +44,7 @@ def test_existing_native_database_is_upgraded_to_current_schema(monkeypatch, tmp
     assert {"password_hash", "username"}.issubset(identity_columns)
     assert "name" not in identity_columns
     assert {"project_memberships", "api_token_projects"}.issubset(tables)
-    assert revision == "0013_identity_locale"
+    assert revision == "0014_search_embedding_hnsw"
     assert {"onboarding_completed_at", "locale"}.issubset(identity_columns)
     assert "result_visualization_types" in tables
     assert "visualizations" in tables
@@ -69,3 +72,45 @@ def test_identity_names_are_migrated_to_unique_usernames(monkeypatch, tmp_path):
     with sqlite3.connect(database) as connection:
         usernames = {row[0] for row in connection.execute("SELECT username FROM identities")}
     assert usernames == {"ada-lovelace", "ada-lovelace-2"}
+
+
+def test_search_embedding_hnsw_migration_is_postgres_only_and_idempotent(monkeypatch):
+    migration = import_module("migrations.versions.0014_search_embedding_hnsw")
+    statements: list[str] = []
+
+    monkeypatch.setattr(
+        migration.op,
+        "get_bind",
+        lambda: SimpleNamespace(dialect=SimpleNamespace(name="postgresql")),
+    )
+    monkeypatch.setattr(migration.op, "execute", lambda statement: statements.append(str(statement)))
+
+    migration.upgrade()
+    migration.upgrade()
+    assert statements == [
+        "CREATE INDEX IF NOT EXISTS ix_search_documents_embedding_hnsw ON search_documents "
+        "USING hnsw (embedding vector_cosine_ops) WHERE embedding IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS ix_search_documents_embedding_hnsw ON search_documents "
+        "USING hnsw (embedding vector_cosine_ops) WHERE embedding IS NOT NULL",
+    ]
+
+    monkeypatch.setattr(
+        migration.op,
+        "get_bind",
+        lambda: SimpleNamespace(dialect=SimpleNamespace(name="sqlite")),
+    )
+    migration.upgrade()
+    assert len(statements) == 2
+
+
+def test_search_document_metadata_declares_postgres_hnsw_index():
+    index = next(
+        item
+        for item in SearchDocument.__table__.indexes
+        if item.name == "ix_search_documents_embedding_hnsw"
+    )
+
+    postgres_options = index.dialect_options["postgresql"]
+    assert postgres_options["using"] == "hnsw"
+    assert postgres_options["ops"] == {"embedding": "vector_cosine_ops"}
+    assert str(postgres_options["where"]) == "embedding IS NOT NULL"

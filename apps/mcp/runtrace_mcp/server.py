@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -135,9 +136,10 @@ def get_visualization(project: str, visualization_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def preview_visualization(project: str, spec: dict[str, Any]) -> dict[str, Any]:
-    """Validate and resolve an RTVis specification without saving it."""
-    return request("POST", f"/api/v1/projects/{project}/visualizations/preview", spec)
+def preview_visualization(project: str, spec: dict[str, Any], source_run_id: str | None = None) -> dict[str, Any]:
+    """Validate and resolve an RTVis specification without saving it, optionally against one source run."""
+    suffix = f"?source_run_id={quote(source_run_id, safe='')}" if source_run_id else ""
+    return request("POST", f"/api/v1/projects/{project}/visualizations/preview{suffix}", spec)
 
 
 @mcp.tool()
@@ -150,9 +152,13 @@ def generate_visualization(project: str, name: str, spec: dict[str, Any], descri
 
 
 @mcp.tool()
-def update_visualization(project: str, visualization_id: str, spec: dict[str, Any] | None = None, name: str | None = None, description: str | None = None, visible: bool | None = None, sort_order: int | None = None) -> dict[str, Any]:
-    """Update the content, presentation, or placement of a saved visualization."""
+def update_visualization(project: str, visualization_id: str, spec: dict[str, Any] | None = None, name: str | None = None, description: str | None = None, visible: bool | None = None, sort_order: int | None = None, source_run_id: str | None = None, clear_source_run: bool = False) -> dict[str, Any]:
+    """Update a saved visualization, optionally retargeting or clearing its source run."""
+    if source_run_id is not None and clear_source_run:
+        raise ValueError("source_run_id and clear_source_run are mutually exclusive")
     payload = {key: value for key, value in {"spec": spec, "name": name, "description": description, "visible": visible, "sort_order": sort_order}.items() if value is not None}
+    if source_run_id is not None or clear_source_run:
+        payload["source_run_id"] = source_run_id
     return request("PATCH", f"/api/v1/projects/{project}/visualizations/{visualization_id}", payload)
 
 
@@ -203,11 +209,17 @@ def release_experiment(project: str, experiment_id: str, worker_id: str) -> dict
 
 
 @mcp.tool()
-def create_run(project: str, name: str, hypothesis: str, reasoning: str = "", experiment_id: str | None = None, evidence_used: list[dict[str, Any]] | None = None, decision_changed: str = "", configuration: dict[str, Any] | None = None, metric_mode: str | None = None) -> dict[str, Any]:
-    """Create and start a tracked run, citing evidence; claimed experiments inherit their result display unless overridden."""
+def create_run(project: str, name: str, hypothesis: str, reasoning: str = "", experiment_id: str | None = None, evidence_used: list[dict[str, Any]] | None = None, decision_changed: str = "", configuration: dict[str, Any] | None = None, metric_mode: str | None = None, worker_id: str | None = None, change_summary: str = "", git_commit: str | None = None) -> dict[str, Any]:
+    """Create and start a tracked run, citing evidence and the worker that owns a claimed experiment."""
     payload = {"name": name, "hypothesis": hypothesis, "reasoning": reasoning, "experiment_id": experiment_id, "evidence_used": evidence_used or [], "decision_changed": decision_changed, "configuration": configuration or {}}
     if metric_mode is not None:
         payload["metric_mode"] = metric_mode
+    if worker_id is not None:
+        payload["worker_id"] = worker_id
+    if change_summary:
+        payload["change_summary"] = change_summary
+    if git_commit is not None:
+        payload["git_commit"] = git_commit
     return request("POST", f"/api/v1/projects/{project}/runs", payload)
 
 

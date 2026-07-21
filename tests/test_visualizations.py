@@ -67,7 +67,7 @@ def test_visualization_guide_preview_and_strict_validation(fresh_database):
     assert guide.status_code == 200
     assert "card" in guide.json()["supported_nodes"]
     assert "javascript" in guide.json()["supported_nodes"]
-    assert guide.json()["dataset_sources"]["runtrace"]["queries"] == ["runs", "experiments"]
+    assert guide.json()["dataset_sources"]["runtrace"]["queries"] == ["runs", "experiments", "run_metrics"]
     assert "autoresearch_progress" in {item["id"] for item in guide.json()["existing_dashboard"]["built_ins"]}
 
     preview = fresh_database.post("/api/v1/projects/dense-optimizer/visualizations/preview", json=inline_spec())
@@ -127,11 +127,56 @@ def test_runtrace_dataset_is_resolved_from_live_project_records(fresh_database):
 
 
 def test_dashboard_visualizations_remain_separate_from_experiment_result_types(fresh_database):
+    run_metrics_spec = {
+        "version": 1,
+        "title": "Called methods",
+        "datasets": {"metrics": {"source": "runtrace", "query": "run_metrics", "filters": {"limit": 10}}},
+        "view": {"type": "table", "dataset": "metrics", "columns": [{"key": "name", "label": "Metric"}, {"key": "value", "label": "Value"}]},
+    }
     created = fresh_database.post(
         "/api/v1/projects/dense-optimizer/visualizations",
-        json={"name": "Called methods", "source_run_id": "RUN-168", "spec": inline_spec("Called methods")},
+        json={"name": "Called methods", "source_run_id": "RUN-168", "spec": run_metrics_spec},
     )
     assert created.status_code == 201, created.text
+    created_rows = created.json()["resolved_datasets"]["metrics"]
+    assert created_rows
+
+    preview = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/visualizations/preview?source_run_id=RUN-168",
+        json=run_metrics_spec,
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["source_run_id"] == "run_168"
+    assert preview.json()["resolved_datasets"]["metrics"] == created_rows
+
+    exported = fresh_database.get(
+        f"/api/v1/projects/dense-optimizer/visualizations/{created.json()['id']}/export"
+    )
+    assert exported.status_code == 200, exported.text
+    portable_dataset = exported.json()["visualization"]["spec"]["datasets"]["metrics"]
+    assert portable_dataset == {"source": "inline", "rows": created_rows}
+    imported = fresh_database.post(
+        "/api/v1/projects/flash-attention-kernel/visualizations/import",
+        json={"document": exported.json(), "name": "Imported called methods"},
+    )
+    assert imported.status_code == 201, imported.text
+    assert imported.json()["source_run_id"] is None
+    assert imported.json()["resolved_datasets"]["metrics"] == created_rows
+
+    dashboard = fresh_database.get("/api/v1/projects/dense-optimizer/dashboard")
+    assert dashboard.status_code == 200
+    assert dashboard.json()["visualizations"][0]["resolved_datasets"]["metrics"]
+
+    invalid = fresh_database.post(
+        "/api/v1/projects/dense-optimizer/visualizations",
+        json={"name": "Missing source run", "spec": run_metrics_spec},
+    )
+    assert invalid.status_code == 422
+    listed_names = {
+        item["name"] for item in fresh_database.get("/api/v1/projects/dense-optimizer/visualizations").json()
+    }
+    assert "Missing source run" not in listed_names
+    assert fresh_database.delete("/api/v1/runs/RUN-168").status_code == 409
 
     run = fresh_database.get("/api/v1/runs/RUN-168")
     assert run.status_code == 200

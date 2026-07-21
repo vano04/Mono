@@ -2,6 +2,8 @@
 
 The included Compose stack is the supported single-host deployment baseline. It runs PostgreSQL, the API, and the web app with persistent named volumes. Review this guide and `auth.md` before making the instance reachable outside localhost.
 
+For product behavior, see the [complete feature catalog](features.md). For the latest repository-wide QA evidence and known environment limitations, see the [verification report](verification-report.md).
+
 ## Deployment modes
 
 Normal mode is empty, persistent, and protected by browser passwords:

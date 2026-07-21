@@ -75,7 +75,7 @@ function ExperimentDetails({ experiment }: { experiment: Experiment }) {
   </div>
 }
 
-function RunDetails({ run, baselineRun, metric, reload }: { run: Run; baselineRun: Run | null; metric: string; reload: () => void }) {
+function RunDetails({ run, baselineRun, metric, canEdit, reload }: { run: Run; baselineRun: Run | null; metric: string; canEdit: boolean; reload: () => void }) {
   const metricEntries = Object.entries(run.metrics ?? {})
   const curveMetric = run.metrics?.[metric] ? metric : metricEntries[0]?.[0]
   return <div className="flex min-w-0 flex-col gap-5 p-4 sm:gap-7 sm:p-7">
@@ -98,12 +98,12 @@ function RunDetails({ run, baselineRun, metric, reload }: { run: Run; baselineRu
     {run.command ? <section className="min-w-0"><h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><Terminal className="size-4" />Command</h3><pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 font-mono text-xs sm:whitespace-pre">{run.command}</pre></section> : null}
     {Object.keys(run.configuration).length || Object.keys(run.parameters || {}).length || run.artifacts?.some((artifact) => artifactKind(artifact) === "config") ? <section className="min-w-0"><h3 className="mb-3 flex items-center gap-2 text-sm font-medium"><FileJson className="size-4" />Configuration</h3>{Object.keys(run.configuration).length || Object.keys(run.parameters || {}).length ? <pre className="mb-3 max-h-72 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 font-mono text-xs leading-5">{JSON.stringify({ configuration: run.configuration, parameters: run.parameters || {} }, null, 2)}</pre> : null}<ArtifactFiles artifacts={(run.artifacts || []).filter((artifact) => artifactKind(artifact) === "config")} /></section> : null}
     {run.events?.length || run.artifacts?.some((artifact) => artifactKind(artifact) === "log") ? <section><h3 className="mb-3 flex items-center gap-2 text-sm font-medium"><ScrollText className="size-4" />Logs & events</h3>{run.events?.length ? <div className="mb-3 flex max-h-72 flex-col gap-3 overflow-auto rounded-lg border p-4">{run.events.map((event) => <div key={event.id} className="grid grid-cols-[auto_1fr] gap-3 text-xs"><time className="font-mono text-muted-foreground">{new Date(event.timestamp).toLocaleTimeString()}</time><span><span className="mr-2 font-mono text-muted-foreground">{event.level}</span>{event.message}</span></div>)}</div> : null}<ArtifactFiles artifacts={(run.artifacts || []).filter((artifact) => artifactKind(artifact) === "log")} /></section> : null}
-    <section><div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-medium">Artifacts</h3><ArtifactUploadDialog runId={run.id} onUploaded={reload} /></div>{run.artifacts?.some((artifact) => artifactKind(artifact) === "artifact") ? <ArtifactFiles artifacts={run.artifacts.filter((artifact) => artifactKind(artifact) === "artifact")} /> : <p className="text-sm text-muted-foreground">No general artifacts saved.</p>}</section>
+    <section><div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-medium">Artifacts</h3>{canEdit ? <ArtifactUploadDialog runId={run.id} onUploaded={reload} /> : null}</div>{run.artifacts?.some((artifact) => artifactKind(artifact) === "artifact") ? <ArtifactFiles artifacts={run.artifacts.filter((artifact) => artifactKind(artifact) === "artifact")} /> : <p className="text-sm text-muted-foreground">No general artifacts saved.</p>}</section>
     {run.git_commit ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><GitCommitHorizontal className="size-4" />{run.git_commit}</p> : null}
   </div>
 }
 
-export function RecordDetailDialog({ selection, slug, baselineId, metric, onClose }: { selection: RecordSelection; slug: string; baselineId: string | null; metric: string; onClose: () => void }) {
+export function RecordDetailDialog({ selection, slug, baselineId, metric, canEdit, onClose }: { selection: RecordSelection; slug: string; baselineId: string | null; metric: string; canEdit: boolean; onClose: () => void }) {
   const [record, setRecord] = useState<Experiment | Run | null>(null)
   const [baselineRun, setBaselineRun] = useState<Run | null>(null)
   const recordRef = useRef<Experiment | Run | null>(null)
@@ -175,7 +175,7 @@ export function RecordDetailDialog({ selection, slug, baselineId, metric, onClos
 
   return <Dialog open={Boolean(selection)} onOpenChange={(open) => { if (!open) onClose() }}>
     <DialogContent ref={dialogContentRef} closeButtonClassName="fixed top-3 right-3 z-[60] sm:absolute sm:top-2 sm:right-2" className="inset-0 top-0 left-0 h-dvh max-h-none max-w-none [translate:none] overflow-x-hidden overflow-y-auto rounded-none p-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[92dvh] sm:max-w-[min(94vw,1100px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl">
-      {visibleRecord ? (isRun ? <RunDetails run={visibleRecord} baselineRun={baselineRun} metric={metric} reload={reloadRun} /> : <ExperimentDetails experiment={visibleRecord} />) : <div className="flex flex-col gap-4 p-6"><DialogHeader><DialogTitle>Experiment details</DialogTitle><DialogDescription>Loading recorded evidence.</DialogDescription></DialogHeader><Skeleton className="h-24" /><Skeleton className="h-64" /></div>}
+      {visibleRecord ? (isRun ? <RunDetails run={visibleRecord} baselineRun={baselineRun} metric={metric} canEdit={canEdit} reload={reloadRun} /> : <ExperimentDetails experiment={visibleRecord} />) : <div className="flex flex-col gap-4 p-6"><DialogHeader><DialogTitle>Experiment details</DialogTitle><DialogDescription>Loading recorded evidence.</DialogDescription></DialogHeader><Skeleton className="h-24" /><Skeleton className="h-64" /></div>}
     </DialogContent>
   </Dialog>
 }
