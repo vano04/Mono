@@ -56,7 +56,9 @@ Normal mode authenticates browser requests with the session cookie and
 headless clients with bearer tokens. Any signed-in identity can create tokens
 under **Access → Your agent tokens**. A token is displayed only once; RunTrace
 stores its SHA-256 digest, visible prefix, name, timestamps, and optional
-expiry. Revocation is immediate.
+expiry. Revocation is immediate. Creating tokens and administering instance
+identities require a browser session; bearer tokens cannot mint replacement or
+broader credentials, list credentials, or revoke them.
 
 ## Development mode
 

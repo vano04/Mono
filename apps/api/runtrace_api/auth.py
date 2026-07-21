@@ -150,8 +150,9 @@ def apply_owner_recovery_password(session: Session) -> None:
     if len(password) < 12:
         raise RuntimeError("RUNTRACE_OWNER_RECOVERY_PASSWORD must contain at least 12 characters")
     owner = session.scalar(select(Identity).where(Identity.role == "owner"))
-    if owner and (not owner.password_hash or not _password_matches(password, owner.password_hash)):
-        owner.password_hash = _password_hash(password)
+    if owner:
+        if not owner.password_hash or not _password_matches(password, owner.password_hash):
+            owner.password_hash = _password_hash(password)
         owner.status = "active"
         session.execute(delete(AuthSession).where(AuthSession.identity_id == owner.id))
         session.commit()
@@ -200,7 +201,13 @@ def _principal(request: Request) -> AuthPrincipal:
     return principal
 
 
-def _admin(principal: AuthPrincipal = Depends(_principal)) -> AuthPrincipal:
+def _browser_principal(principal: AuthPrincipal = Depends(_principal)) -> AuthPrincipal:
+    if principal.token_project_ids is not None:
+        raise HTTPException(403, "A browser session is required for this operation")
+    return principal
+
+
+def _admin(principal: AuthPrincipal = Depends(_browser_principal)) -> AuthPrincipal:
     if principal.role not in {"owner", "admin"}:
         raise HTTPException(403, "Admin access is required")
     return principal
@@ -363,7 +370,7 @@ def update_identity_preferences(
     body: IdentityPreferencesUpdateRequest,
     request: Request,
     session: Session = Depends(get_db),
-    _: AuthPrincipal = Depends(_principal),
+    _: AuthPrincipal = Depends(_browser_principal),
 ) -> dict[str, Any]:
     principal = request.state.identity
     if principal.dev:
@@ -381,7 +388,7 @@ def update_identity_preferences(
 def complete_onboarding(
     request: Request,
     session: Session = Depends(get_db),
-    _: AuthPrincipal = Depends(_principal),
+    _: AuthPrincipal = Depends(_browser_principal),
 ) -> dict[str, bool]:
     principal = request.state.identity
     if principal.dev:
@@ -454,7 +461,7 @@ def change_password(
     response: Response,
     request: Request,
     session: Session = Depends(get_db),
-    _: AuthPrincipal = Depends(_principal),
+    _: AuthPrincipal = Depends(_browser_principal),
 ) -> dict[str, Any]:
     identity = session.get(Identity, request.state.identity.id)
     if not identity or (identity.password_hash and not _password_matches(body.current_password, identity.password_hash)):
@@ -482,6 +489,8 @@ def list_api_tokens(
     _: AuthPrincipal = Depends(_principal),
 ) -> list[dict[str, Any]]:
     principal = request.state.identity
+    if principal.token_project_ids is not None:
+        raise HTTPException(403, "A browser session is required to manage API tokens")
     query = select(ApiToken).options(
         selectinload(ApiToken.identity),
         selectinload(ApiToken.project_grants).selectinload(ApiTokenProject.project),
@@ -500,6 +509,10 @@ def create_api_token(
     _: AuthPrincipal = Depends(_principal),
 ) -> dict[str, Any]:
     principal = request.state.identity
+    if principal.dev:
+        raise HTTPException(409, "API tokens are not managed in development mode")
+    if principal.token_project_ids is not None:
+        raise HTTPException(403, "A browser session is required to create API tokens")
     project_ids = set(body.project_ids)
     if not project_ids:
         if principal.role in {"owner", "admin"}:
@@ -545,6 +558,8 @@ def revoke_api_token(
     _: AuthPrincipal = Depends(_principal),
 ) -> None:
     principal = request.state.identity
+    if principal.token_project_ids is not None:
+        raise HTTPException(403, "A browser session is required to manage API tokens")
     query = select(ApiToken).where(ApiToken.id == token_id)
     if principal.role not in {"owner", "admin"}:
         query = query.where(ApiToken.identity_id == principal.id)
@@ -556,6 +571,8 @@ def revoke_api_token(
 
 
 def _project_admin(session: Session, project_id: str, principal: AuthPrincipal) -> None:
+    if principal.token_project_ids is not None and project_id not in principal.token_project_ids:
+        raise HTTPException(403, "This API token is not authorized for this project")
     if principal.dev or principal.role in {"owner", "admin"}:
         return
     role = session.scalar(select(ProjectMembership.role).where(

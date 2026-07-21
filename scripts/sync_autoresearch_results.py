@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import asyncio
 import csv
 import json
@@ -11,8 +12,11 @@ from typing import Any
 
 import httpx
 
+from runtrace.credentials import resolve_connection
+
 
 TRANSPORTS = ("http", "python", "mcp")
+IMPORT_FAILURE_SUMMARY = "Autoresearch import failed after run creation"
 
 
 def read_rows(path: Path) -> list[dict[str, Any]]:
@@ -22,6 +26,8 @@ def read_rows(path: Path) -> list[dict[str, Any]]:
     if not rows or set(rows[0]) != required:
         raise ValueError(f"expected TSV columns {sorted(required)}")
     for index, row in enumerate(rows, start=1):
+        if row["status"] not in {"keep", "discard", "crash"}:
+            raise ValueError(f"row {index} has unsupported status {row['status']!r}")
         row["source_row"] = index
         row["val_loss"] = float(row["val_loss"].replace(",", ""))
         row["train_time_s"] = float(row["train_time_s"].replace(",", ""))
@@ -61,14 +67,35 @@ def summary(row: dict[str, Any]) -> str:
 
 
 def existing_source_rows(client: httpx.Client, project: str) -> set[int]:
-    response = client.get(f"/api/v1/projects/{project}/runs")
+    response = client.get(f"/api/v1/projects/{project}/runs?include_archived=true")
     response.raise_for_status()
-    return {
-        int(run["configuration"]["source_row"])
-        for run in response.json()
-        if run.get("configuration", {}).get("source_file") == "results.tsv"
-        and run["configuration"].get("source_row") is not None
-    }
+    completed: set[int] = set()
+    for run in response.json():
+        configuration = run.get("configuration", {})
+        if configuration.get("source_file") != "results.tsv" or configuration.get("source_row") is None:
+            continue
+        source_row = int(configuration["source_row"])
+        lifecycle = run.get("lifecycle")
+        source_status = configuration.get("autoresearch_status")
+        if lifecycle == "completed" and source_status in {None, "keep", "discard"}:
+            completed.add(source_row)
+            continue
+        if lifecycle == "crashed":
+            result_summary = run.get("result_summary")
+            expected_summary = run.get("hypothesis") or (
+                "Run aborted" if configuration.get("sync_transport") == "python" else ""
+            )
+            expected_source_crash = source_status == "crash" and result_summary == expected_summary
+            legacy_source_crash = source_status is None and result_summary != IMPORT_FAILURE_SUMMARY
+            if expected_source_crash or legacy_source_crash:
+                completed.add(source_row)
+            continue
+        recovery = client.post(
+            f"/api/v1/runs/{run['id']}/crash",
+            json={"error_summary": IMPORT_FAILURE_SUMMARY},
+        )
+        recovery.raise_for_status()
+    return completed
 
 
 def sync_http(client: httpx.Client, project: str, row: dict[str, Any]) -> str:
@@ -77,50 +104,65 @@ def sync_http(client: httpx.Client, project: str, row: dict[str, Any]) -> str:
     )
     created.raise_for_status()
     run_id = created.json()["id"]
-    metrics = client.post(
-        f"/api/v1/runs/{run_id}/metrics",
-        json={"metrics": [
-            {"name": "validation_loss", "value": row["val_loss"]},
-            {"name": "train_time_s", "value": row["train_time_s"]},
-        ]},
-    )
-    metrics.raise_for_status()
-    if row["status"] == "crash":
-        completed = client.post(
-            f"/api/v1/runs/{run_id}/crash", json={"error_summary": row["description"]}
+    try:
+        metrics = client.post(
+            f"/api/v1/runs/{run_id}/metrics",
+            json={"metrics": [
+                {"name": "validation_loss", "value": row["val_loss"]},
+                {"name": "train_time_s", "value": row["train_time_s"]},
+            ]},
         )
-    else:
-        completed = client.post(
-            f"/api/v1/runs/{run_id}/finish",
-            json={
-                "disposition": disposition(row["status"]),
-                "result_summary": summary(row),
-                "conclusion": row["description"],
-            },
-        )
-    completed.raise_for_status()
+        metrics.raise_for_status()
+        if row["status"] == "crash":
+            completed = client.post(
+                f"/api/v1/runs/{run_id}/crash", json={"error_summary": row["description"]}
+            )
+        else:
+            completed = client.post(
+                f"/api/v1/runs/{run_id}/finish",
+                json={
+                    "disposition": disposition(row["status"]),
+                    "result_summary": summary(row),
+                    "conclusion": row["description"],
+                },
+            )
+        completed.raise_for_status()
+    except Exception:
+        try:
+            recovery = client.post(
+                f"/api/v1/runs/{run_id}/crash",
+                json={"error_summary": IMPORT_FAILURE_SUMMARY},
+            )
+            recovery.raise_for_status()
+        except Exception:
+            pass
+        raise
     return run_id
 
 
-def sync_python(base_url: str, project: str, row: dict[str, Any]) -> str:
+def sync_python(base_url: str, api_token: str | None, project: str, row: dict[str, Any]) -> str:
     from runtrace import RunTrace
 
-    client = RunTrace(base_url=base_url, strict=True, timeout=30)
+    client = RunTrace(base_url=base_url, api_token=api_token, strict=True, timeout=30)
     payload = create_payload(row, "python")
-    with client.run(
-        project,
-        payload.pop("name"),
-        payload.pop("hypothesis"),
-        working_directory=os.getcwd(),
-        **payload,
-    ) as run:
-        run.log_metrics({"validation_loss": row["val_loss"], "train_time_s": row["train_time_s"]})
-        if row["status"] == "crash":
-            run.abort(row["description"])
-        else:
-            run.finish(disposition(row["status"]), summary(row), row["description"])
-        assert run.id
-        return run.id
+    try:
+        with client.run(
+            project,
+            payload.pop("name"),
+            payload.pop("hypothesis"),
+            working_directory=os.getcwd(),
+            **payload,
+        ) as run:
+            run.log_metrics({"validation_loss": row["val_loss"], "train_time_s": row["train_time_s"]})
+            if row["status"] == "crash":
+                run.abort(row["description"])
+            else:
+                run.finish(disposition(row["status"]), summary(row), row["description"])
+            assert run.id
+            return run.id
+    finally:
+        atexit.unregister(client._flush_at_exit)
+        client.client.close()
 
 
 def mcp_value(result: Any) -> dict[str, Any]:
@@ -138,20 +180,32 @@ async def sync_mcp(session: Any, project: str, row: dict[str, Any]) -> str:
         "project": project,
         "name": payload["name"],
         "hypothesis": payload["hypothesis"],
-        "reasoning": payload["change_summary"],
-        "configuration": payload["configuration"] | {"git_commit": row["commit"]},
+        "change_summary": payload["change_summary"],
+        "git_commit": row["commit"],
+        "metric_mode": payload["metric_mode"],
+        "configuration": payload["configuration"],
     }))
     run_id = created["id"]
-    for name, row_key in (("validation_loss", "val_loss"), ("train_time_s", "train_time_s")):
-        mcp_value(await session.call_tool("log_metric", {
-            "run_id": run_id, "name": name, "value": row[row_key]
+    try:
+        for name, row_key in (("validation_loss", "val_loss"), ("train_time_s", "train_time_s")):
+            mcp_value(await session.call_tool("log_metric", {
+                "run_id": run_id, "name": name, "value": row[row_key]
+            }))
+        mcp_value(await session.call_tool("finish_run", {
+            "run_id": run_id,
+            "disposition": disposition(row["status"]),
+            "result_summary": summary(row),
+            "conclusion": row["description"],
         }))
-    mcp_value(await session.call_tool("finish_run", {
-        "run_id": run_id,
-        "disposition": disposition(row["status"]),
-        "result_summary": summary(row),
-        "conclusion": row["description"],
-    }))
+    except Exception:
+        try:
+            mcp_value(await session.call_tool("crash_run", {
+                "run_id": run_id,
+                "error_summary": IMPORT_FAILURE_SUMMARY,
+            }))
+        except Exception:
+            pass
+        raise
     return run_id
 
 
@@ -159,7 +213,9 @@ async def run(args: argparse.Namespace) -> None:
     rows = read_rows(args.tsv)
     counts = {name: 0 for name in TRANSPORTS}
     skipped = 0
-    with httpx.Client(base_url=args.base_url, timeout=30) as http:
+    base_url, api_token = resolve_connection(args.base_url)
+    headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
+    with httpx.Client(base_url=base_url, headers=headers, timeout=30) as http:
         known = existing_source_rows(http, args.project)
         selected = [row for row in rows if transport_for(row) in args.transports]
         skipped = sum(row["source_row"] in known for row in selected)
@@ -174,17 +230,20 @@ async def run(args: argparse.Namespace) -> None:
             if transport == "http":
                 sync_http(http, args.project, row)
             else:
-                sync_python(args.base_url, args.project, row)
+                sync_python(base_url, api_token, args.project, row)
             counts[transport] += 1
 
     if mcp_rows:
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
 
+        server_env = {**os.environ, "RUNTRACE_BASE_URL": base_url}
+        if api_token:
+            server_env["RUNTRACE_API_TOKEN"] = api_token
         server = StdioServerParameters(
             command=sys.executable,
             args=["-m", "runtrace_mcp.server"],
-            env={**os.environ, "RUNTRACE_BASE_URL": args.base_url},
+            env=server_env,
         )
         async with stdio_client(server) as (read, write):
             async with ClientSession(read, write) as session:
@@ -200,7 +259,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("tsv", type=Path)
     parser.add_argument("--project", default="optimizer")
-    parser.add_argument("--base-url", default="http://localhost:8000")
+    parser.add_argument("--base-url")
     parser.add_argument("--transport", dest="transports", action="append", choices=TRANSPORTS)
     args = parser.parse_args()
     args.transports = set(args.transports or TRANSPORTS)

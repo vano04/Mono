@@ -1,3 +1,5 @@
+import type { ProjectAccessRole } from "@/lib/project-access"
+
 export type Lifecycle = "proposed" | "pending" | "running" | "completed" | "crashed"
 export type Disposition = "kept" | "discarded" | "undecided"
 
@@ -180,6 +182,7 @@ export interface VisualizationDocument {
 }
 
 export interface Dashboard {
+  access_role: ProjectAccessRole
   project: Project
   experiments: Experiment[]
   active_runs: Run[]

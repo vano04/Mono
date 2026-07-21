@@ -43,15 +43,17 @@ def resolve_connection(
         or os.getenv("RUNTRACE_BASE_URL")
         or saved.get("base_url")
         or DEFAULT_BASE_URL
-    )
+    ).rstrip("/")
+    saved_base_url = saved.get("base_url", "").rstrip("/")
+    saved_api_token = saved.get("api_token") if saved_base_url == resolved_base_url else None
     resolved_api_token = (
         api_token
         or os.getenv("RUNTRACE_API_TOKEN")
         or os.getenv("RUNTRACE_API_KEY")
-        or saved.get("api_token")
-        or (DEFAULT_DEV_API_TOKEN if resolved_base_url.rstrip("/") == DEFAULT_BASE_URL else None)
+        or saved_api_token
+        or (DEFAULT_DEV_API_TOKEN if resolved_base_url == DEFAULT_BASE_URL else None)
     )
-    return resolved_base_url.rstrip("/"), resolved_api_token
+    return resolved_base_url, resolved_api_token
 
 
 def save_credentials(base_url: str, api_token: str) -> Path:

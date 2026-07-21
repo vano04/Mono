@@ -1,0 +1,5 @@
+commit	config	val_loss	train_time_s	status	description
+qa001	configs/http-keep.toml	1.25	4.0	keep	HTTP importer kept this synthetic result
+qa002	configs/python-discard.toml	1.50	5.0	discard	Python SDK importer discarded this synthetic result
+qa003	configs/mcp-keep.toml	1.10	6.0	keep	MCP importer kept this synthetic result
+qa004	configs/http-crash.toml	9.99	0.5	crash	Synthetic source crash for recovery verification

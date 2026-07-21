@@ -11,8 +11,8 @@ import { EditExperimentDialog } from "@/components/edit-experiment-dialog"
 import { runtrace } from "@/lib/api"
 import { useI18n } from "@/components/i18n-provider"
 
-export function RecordActions({ slug, id, type, archived = false, canBaseline = false, onChanged }: {
-  slug: string; id: string; type: "experiment" | "run"; archived?: boolean; canBaseline?: boolean; onChanged: () => void
+export function RecordActions({ slug, id, type, canEdit, archived = false, canBaseline = false, onChanged }: {
+  slug: string; id: string; type: "experiment" | "run"; canEdit: boolean; archived?: boolean; canBaseline?: boolean; onChanged: () => void
 }) {
   const { t } = useI18n()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -33,6 +33,7 @@ export function RecordActions({ slug, id, type, archived = false, canBaseline = 
       onChanged()
     } catch (error) { toast.error(error instanceof Error ? error.message : t("Action failed")) }
   }
+  if (!canEdit) return null
   return (
     <>
       <DropdownMenu>

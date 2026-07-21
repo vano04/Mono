@@ -118,7 +118,7 @@ RUNTRACE_EVENT level=info message="checkpoint saved"`}</Code>
 get_project_context({ project: "dense-optimizer" })
 search_experiments({ project: "dense-optimizer", query: "runtime regressions" })
 claim_experiment({ project: "dense-optimizer", worker_id: "autoresearch/Jul14" })
-create_run({ project: "dense-optimizer", experiment_id: "exp_...", name: "..." })
+create_run({ project: "dense-optimizer", experiment_id: "exp_...", worker_id: "autoresearch/Jul14", name: "...", hypothesis: "..." })
 log_metric({ run_id: "run_...", name: "validation_loss", value: 3.24, step: 1000 })
 finish_run({ run_id: "run_...", disposition: "kept", result_summary: "...", conclusion: "..." })`}</Code>
         </DocSection>

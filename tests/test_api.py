@@ -166,7 +166,7 @@ def test_run_inherits_custom_result_mode_from_claimed_experiment(fresh_database)
     assert claimed.status_code == 200, claimed.text
     created = fresh_database.post(
         "/api/v1/projects/dense-optimizer/runs",
-        json={"name": "Profile compiler calls", "experiment_id": "EXP-023"},
+        json={"name": "Profile compiler calls", "experiment_id": "EXP-023", "worker_id": "compiler-profiler"},
     )
     assert created.status_code == 201, created.text
     assert created.json()["metric_mode"] == "called-methods"
