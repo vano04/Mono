@@ -23,6 +23,7 @@ from .models import ApiToken, ApiTokenProject, Artifact, AuthSession, Identity, 
 
 
 SESSION_COOKIE = "runtrace_session"
+DEV_IDENTITY_ID = "identity_development"
 LOGIN_ATTEMPT_LIMIT = 10
 LOGIN_ATTEMPT_WINDOW_SECONDS = 300
 _login_attempts: dict[str, list[float]] = {}
@@ -57,7 +58,7 @@ class LoginRequest(BaseModel):
 
 
 class PasswordChangeRequest(BaseModel):
-    current_password: str = Field(min_length=1, max_length=1024)
+    current_password: str = Field(max_length=1024)
     new_password: str = Field(min_length=12, max_length=1024)
 
 
@@ -160,6 +161,37 @@ def apply_owner_recovery_password(session: Session) -> None:
         owner.status = "active"
         session.execute(delete(AuthSession).where(AuthSession.identity_id == owner.id))
         session.commit()
+
+
+def _development_identity(session: Session) -> Identity:
+    """Return the durable identity behind the passwordless development session."""
+    identity = session.get(Identity, DEV_IDENTITY_ID)
+    if identity:
+        return identity
+
+    username = "development"
+    suffix = 1
+    while session.scalar(select(Identity.id).where(Identity.username == username)):
+        suffix += 1
+        username = f"development-{suffix}"
+
+    identity = Identity(
+        id=DEV_IDENTITY_ID,
+        username=username,
+        role="owner" if not session.scalar(select(Identity.id).where(Identity.role == "owner")) else "admin",
+        status="active",
+        onboarding_completed_at=now_utc(),
+    )
+    session.add(identity)
+    try:
+        session.commit()
+    except IntegrityError:
+        # Multiple first requests can race to create the development identity.
+        session.rollback()
+        identity = session.get(Identity, DEV_IDENTITY_ID)
+        if not identity:
+            raise
+    return identity
 
 
 def _aware(value: datetime) -> datetime:
@@ -295,7 +327,9 @@ async def authenticate_request(request: Request, call_next):
     if settings.demo:
         request.state.identity = AuthPrincipal("demo", "Demo viewer", "member", "active", demo=True)
     elif settings.dev:
-        request.state.identity = AuthPrincipal("dev", "Development", "owner", "active", True)
+        with SessionLocal() as session:
+            identity = _development_identity(session)
+        request.state.identity = AuthPrincipal(identity.id, "Development", "owner", "active", True)
         return await call_next(request)
     else:
         raw_token = request.cookies.get(SESSION_COOKIE)
@@ -377,7 +411,7 @@ async def authenticate_request(request: Request, call_next):
 def auth_status(request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
     principal = getattr(request.state, "identity", None)
     configured = settings.demo or bool(session.scalar(select(func.count()).select_from(Identity)))
-    identity = session.get(Identity, principal.id) if principal and not principal.dev and not principal.demo else None
+    identity = session.get(Identity, principal.id) if principal and not principal.demo else None
     return {
         "dev": settings.dev,
         "demo": settings.demo,
@@ -388,12 +422,12 @@ def auth_status(request: Request, session: Session = Depends(get_db)) -> dict[st
             "username": principal.username,
             "role": principal.role,
             "status": principal.status,
-            "password_set": True if principal.dev or principal.demo else bool(identity and identity.password_hash),
-            "onboarding_completed": True if principal.dev or principal.demo else bool(identity and identity.onboarding_completed_at),
-            "locale": "en" if principal.dev or principal.demo else (identity.locale if identity else "en"),
-            "theme": "system" if principal.dev or principal.demo else (identity.theme if identity else "system"),
-            "accent_color": "#4f46e5" if principal.dev or principal.demo else (identity.accent_color if identity else "#4f46e5"),
-            "compact_rows": False if principal.dev or principal.demo else bool(identity and identity.compact_rows),
+            "password_set": True if principal.demo else bool(identity and identity.password_hash),
+            "onboarding_completed": True if principal.demo else bool(identity and identity.onboarding_completed_at),
+            "locale": "en" if principal.demo else (identity.locale if identity else "en"),
+            "theme": "system" if principal.demo else (identity.theme if identity else "system"),
+            "accent_color": "#4f46e5" if principal.demo else (identity.accent_color if identity else "#4f46e5"),
+            "compact_rows": False if principal.demo else bool(identity and identity.compact_rows),
         },
     }
 
@@ -406,19 +440,6 @@ def update_identity_preferences(
     _: AuthPrincipal = Depends(_browser_principal),
 ) -> dict[str, Any]:
     principal = request.state.identity
-    if principal.dev:
-        return {
-            "id": principal.id,
-            "username": principal.username,
-            "role": principal.role,
-            "status": principal.status,
-            "password_set": True,
-            "onboarding_completed": True,
-            "locale": body.locale or "en",
-            "theme": body.theme or "system",
-            "accent_color": body.accent_color or "#4f46e5",
-            "compact_rows": body.compact_rows if body.compact_rows is not None else False,
-        }
     identity = session.get(Identity, principal.id)
     if not identity:
         raise HTTPException(404, "Identity not found")
@@ -442,8 +463,6 @@ def complete_onboarding(
     _: AuthPrincipal = Depends(_browser_principal),
 ) -> dict[str, bool]:
     principal = request.state.identity
-    if principal.dev:
-        return {"onboarding_completed": True}
     identity = session.get(Identity, principal.id)
     if not identity:
         raise HTTPException(404, "Identity not found")
@@ -560,8 +579,6 @@ def create_api_token(
     _: AuthPrincipal = Depends(_principal),
 ) -> dict[str, Any]:
     principal = request.state.identity
-    if principal.dev:
-        raise HTTPException(409, "API tokens are not managed in development mode")
     if principal.token_project_ids is not None:
         raise HTTPException(403, "A browser session is required to create API tokens")
     project_ids = set(body.project_ids)

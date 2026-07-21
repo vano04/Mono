@@ -15,10 +15,33 @@ def test_dev_mode_bypasses_authentication(fresh_database):
     assert status.json()["dev"] is True
     assert status.json()["demo"] is False
     assert status.json()["identity"]["role"] == "owner"
+    assert status.json()["identity"]["password_set"] is False
     assert fresh_database.get("/api/v1/projects").status_code == 200
-    token = fresh_database.post("/api/v1/auth/tokens", json={"name": "Unavailable in dev mode"})
-    assert token.status_code == 409
-    assert token.json()["detail"] == "API tokens are not managed in development mode"
+
+    preferences = fresh_database.patch("/api/v1/auth/preferences", json={
+        "locale": "fr",
+        "theme": "dark",
+        "accent_color": "#AABBCC",
+        "compact_rows": True,
+    })
+    assert preferences.status_code == 200
+    persisted = fresh_database.get("/api/v1/auth/status").json()["identity"]
+    assert persisted["locale"] == "fr"
+    assert persisted["theme"] == "dark"
+    assert persisted["accent_color"] == "#aabbcc"
+    assert persisted["compact_rows"] is True
+
+    password = fresh_database.post("/api/v1/auth/password", json={
+        "current_password": "",
+        "new_password": "development password",
+    })
+    assert password.status_code == 200
+    assert fresh_database.get("/api/v1/auth/status").json()["identity"]["password_set"] is True
+
+    token = fresh_database.post("/api/v1/auth/tokens", json={"name": "Development CLI"})
+    assert token.status_code == 201
+    assert token.json()["token"].startswith("rt_")
+    assert fresh_database.get("/api/v1/auth/tokens").json()[0]["name"] == "Development CLI"
 
 
 def test_normal_mode_requires_bootstrap_then_a_session(fresh_database, monkeypatch):

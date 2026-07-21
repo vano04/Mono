@@ -134,11 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
     setLocale(identity.locale)
-    if (!status.dev) {
-      setTheme(identity.theme)
-      hydrateAppearance({ accent: identity.accent_color, compactRows: identity.compact_rows })
-    }
-  }, [hydrateAppearance, setLocale, setTheme, status?.dev, status?.identity])
+    setTheme(identity.theme)
+    hydrateAppearance({ accent: identity.accent_color, compactRows: identity.compact_rows })
+  }, [hydrateAppearance, setLocale, setTheme, status?.identity])
 
   const value = useMemo<AuthContextValue | null>(() => {
     if (!status?.identity) return null
