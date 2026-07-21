@@ -1,6 +1,6 @@
 import pytest
 
-from runtrace_mcp import server
+from mono_mcp import server
 
 
 @pytest.mark.parametrize(
@@ -29,7 +29,7 @@ from runtrace_mcp import server
         (server.update_visualization, ("dense-optimizer", "vis_1", None, None, None, None, None, None, True), ("PATCH", "/api/v1/projects/dense-optimizer/visualizations/vis_1", {"source_run_id": None})),
         (server.delete_visualization, ("dense-optimizer", "vis_1"), ("DELETE", "/api/v1/projects/dense-optimizer/visualizations/vis_1", None)),
         (server.export_visualization, ("dense-optimizer", "vis_1"), ("GET", "/api/v1/projects/dense-optimizer/visualizations/vis_1/export", None)),
-        (server.import_visualization, ("dense-optimizer", {"format": "runtrace-visualization"}, None), ("POST", "/api/v1/projects/dense-optimizer/visualizations/import", {"document": {"format": "runtrace-visualization"}, "created_by": "agent"})),
+        (server.import_visualization, ("dense-optimizer", {"format": "mono-visualization"}, None), ("POST", "/api/v1/projects/dense-optimizer/visualizations/import", {"document": {"format": "mono-visualization"}, "created_by": "agent"})),
         (server.propose_experiment, ("dense-optimizer", "Test cap", "Caps help", "Prior evidence", "Add flag", "gpt", "scalar"), ("POST", "/api/v1/projects/dense-optimizer/experiments", {"title": "Test cap", "hypothesis": "Caps help", "reasoning": "Prior evidence", "implementation_details": "Add flag", "source": "agent", "source_model": "gpt", "metric_mode": "scalar"})),
         (server.claim_experiment, ("dense-optimizer", "worker-1", None), ("POST", "/api/v1/projects/dense-optimizer/experiments/claim", {"worker_id": "worker-1"})),
         (server.claim_experiment, ("dense-optimizer", "worker-1", "EXP-021"), ("POST", "/api/v1/projects/dense-optimizer/experiments/EXP-021/claim", {"worker_id": "worker-1"})),

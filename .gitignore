@@ -45,4 +45,4 @@ tests/.runtime/
 /docs/verification-report.md
 /artifacts/
 /Clips/
-/RunTraceDemo/browser-e2e/*.png
+/MonoDemo/browser-e2e/*.png

@@ -1,19 +1,19 @@
 # Live metrics
 
-RunTrace can receive training metrics through the HTTP API, Python SDK, CLI, or MCP server. Every method writes to the same run record, so the dashboard behaves the same regardless of which client sent a point.
+Mono can receive training metrics through the HTTP API, Python SDK, CLI, or MCP server. Every method writes to the same run record, so the dashboard behaves the same regardless of which client sent a point.
 
 ## Before you start
 
-1. Start RunTrace and create a project.
+1. Start Mono and create a project.
 2. In a normal instance, create an agent token under **Access → Your agent tokens**.
 3. Authenticate once, or export the connection for the process that will send metrics:
 
 ```bash
-runtrace auth rt_... --base-url https://runtrace.example.com
+mono auth rt_... --base-url https://mono.example.com
 
 # Alternative for containers and CI
-export RUNTRACE_BASE_URL=https://runtrace.example.com
-export RUNTRACE_API_TOKEN=rt_...
+export MONO_BASE_URL=https://mono.example.com
+export MONO_API_TOKEN=rt_...
 ```
 
 Open the project dashboard, select a running run, and leave its detail dialog open. Curve metrics, metric summaries, structured events, and run status update while the run is active. The stream normally reflects a committed point within about two seconds and reconnects automatically.
@@ -25,18 +25,18 @@ Use a stable metric name and monotonically increasing integer steps. A run accep
 Install the package:
 
 ```bash
-python -m pip install runtrace-ai
+python -m pip install mono-ai
 ```
 
 The context manager creates the run, records Git and host metadata, reports a crash when the block raises, and finishes an unclosed run when the block exits. Call `log_metric` for one series or `log_metrics` to batch values that share a step.
 
 ```python
 import os
-from runtrace import configure, run
+from mono import configure, run
 
 configure(
-    os.environ["RUNTRACE_BASE_URL"],
-    api_token=os.environ["RUNTRACE_API_TOKEN"],
+    os.environ["MONO_BASE_URL"],
+    api_token=os.environ["MONO_API_TOKEN"],
     strict=True,
 )
 
@@ -64,15 +64,15 @@ with run(
 If another component already created the run, attach the SDK instead of creating a duplicate:
 
 ```bash
-RUNTRACE_RUN_ID=run_... python train.py
+MONO_RUN_ID=run_... python train.py
 ```
 
 ## CLI wrapper
 
-`runtrace exec` creates a run and watches the wrapped command's combined stdout and stderr. Print one structured record per line and flush output so it can be sent immediately.
+`mono exec` creates a run and watches the wrapped command's combined stdout and stderr. Print one structured record per line and flush output so it can be sent immediately.
 
 ```bash
-runtrace exec \
+mono exec \
   --project dense-optimizer \
   --name "adaptive cap schedule" \
   --hypothesis "late relaxation improves validation loss" -- \
@@ -83,15 +83,15 @@ runtrace exec \
 # train.py
 for step in range(0, 1001, 100):
     loss = train_and_evaluate(step)
-    print(f"RUNTRACE_METRIC validation_loss={loss} step={step}", flush=True)
-    print(f'RUNTRACE_EVENT level=info message="completed step {step}"', flush=True)
+    print(f"MONO_METRIC validation_loss={loss} step={step}", flush=True)
+    print(f'MONO_EVENT level=info message="completed step {step}"', flush=True)
 ```
 
 Supported line formats are:
 
 ```text
-RUNTRACE_METRIC <name>=<number> step=<non-negative integer>
-RUNTRACE_EVENT level=<debug|info|warning|error> message="<text>"
+MONO_METRIC <name>=<number> step=<non-negative integer>
+MONO_EVENT level=<debug|info|warning|error> message="<text>"
 ```
 
 The `step` field is optional. A zero exit code completes the run as undecided; a nonzero exit code marks it crashed and is returned by the wrapper.
@@ -101,17 +101,17 @@ The `step` field is optional. A zero exit code completes the run as undecided; a
 Create a run, append batches of up to 1,000 points, and finish it. Use a unique `X-Request-ID` for retryable metric batches so a network retry does not duplicate them.
 
 ```bash
-API=https://runtrace.example.com
+API=https://mono.example.com
 PROJECT=dense-optimizer
 
 RUN_ID=$(curl --fail --silent \
-  -H "Authorization: Bearer $RUNTRACE_API_TOKEN" \
+  -H "Authorization: Bearer $MONO_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"adaptive cap schedule","hypothesis":"late relaxation improves validation loss","metric_mode":"curve"}' \
   "$API/api/v1/projects/$PROJECT/runs" | jq -r .id)
 
 curl --fail \
-  -H "Authorization: Bearer $RUNTRACE_API_TOKEN" \
+  -H "Authorization: Bearer $MONO_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-Request-ID: validation-step-100" \
   -d '{"metrics":[
@@ -125,7 +125,7 @@ Metric points may also include an ISO 8601 `timestamp` and a JSON `context` obje
 
 ```bash
 curl -N \
-  -H "Authorization: Bearer $RUNTRACE_API_TOKEN" \
+  -H "Authorization: Bearer $MONO_API_TOKEN" \
   "$API/api/v1/runs/$RUN_ID/stream"
 
 # event: metric
@@ -136,7 +136,7 @@ Finish the run when training ends:
 
 ```bash
 curl --fail \
-  -H "Authorization: Bearer $RUNTRACE_API_TOKEN" \
+  -H "Authorization: Bearer $MONO_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"disposition":"kept","result_summary":"validation_loss 3.24","conclusion":"Keep the adaptive schedule."}' \
   "$API/api/v1/runs/$RUN_ID/finish"
@@ -144,10 +144,10 @@ curl --fail \
 
 ## MCP tools
 
-Install the RunTrace plugin for Codex or Claude Code, or configure any stdio MCP host to run:
+Install the Mono plugin for Codex or Claude Code, or configure any stdio MCP host to run:
 
 ```bash
-uvx --from 'runtrace-ai[mcp]==0.1.5' runtrace-mcp
+uvx --from 'mono-ai[mcp]==0.1.6' mono-mcp
 ```
 
 An agent can then use this sequence:
@@ -189,7 +189,7 @@ finish_run({
 })
 ```
 
-Choose exactly one tracking owner. If an MCP agent creates the run and launches Python code instrumented with the SDK, pass the returned ID as `RUNTRACE_RUN_ID`. Do not create a second run with `runtrace exec` or another SDK context for the same execution.
+Choose exactly one tracking owner. If an MCP agent creates the run and launches Python code instrumented with the SDK, pass the returned ID as `MONO_RUN_ID`. Do not create a second run with `mono exec` or another SDK context for the same execution.
 
 ## Troubleshooting
 

@@ -10,7 +10,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import type { ExperimentResultVisualizationType } from "@/lib/types"
 import { useI18n } from "@/components/i18n-provider"
 
@@ -27,13 +27,13 @@ export function CreateExperimentDialog({ slug, onCreated }: { slug: string; onCr
 
   useEffect(() => {
     if (!open) return
-    runtrace.resultVisualizationTypes(slug).then(setResultTypes).catch(() => undefined)
+    mono.resultVisualizationTypes(slug).then(setResultTypes).catch(() => undefined)
   }, [open, slug])
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setPending(true)
     try {
-      await runtrace.createExperiment(slug, { title, hypothesis, reasoning, implementation_details: details, metric_mode: metricMode, source: "human" })
+      await mono.createExperiment(slug, { title, hypothesis, reasoning, implementation_details: details, metric_mode: metricMode, source: "human" })
       toast.success(t("Experiment added to the shared queue"))
       setOpen(false); setTitle(""); setHypothesis(""); setReasoning(""); setDetails(""); setMetricMode("curve")
       onCreated()

@@ -1,6 +1,6 @@
-# RunTrace feature catalog
+# Mono feature catalog
 
-This catalog describes the current repository source (package metadata `0.1.5`) and distinguishes public product behavior from internal records and migration-only compatibility tables.
+This catalog describes the current repository source (package metadata `0.1.6`) and distinguishes public product behavior from internal records and migration-only compatibility tables.
 
 ## Product surfaces
 
@@ -15,7 +15,7 @@ This catalog describes the current repository source (package metadata `0.1.5`) 
 
 ## Web application
 
-All web routes share the authentication gate. A normal instance requires an owner bootstrap or password login; trusted `RUNTRACE_DEV=true` instances bypass authentication.
+All web routes share the authentication gate. A normal instance requires an owner bootstrap or password login; trusted `MONO_DEV=true` instances bypass authentication.
 
 ### Routes
 
@@ -112,7 +112,7 @@ All web routes share the authentication gate. A normal instance requires an owne
 - Project grants constrain list, direct project/run/artifact access, global search, membership administration, and project creation.
 - Browser-session members manage their own tokens; browser-session administrators can manage instance identities and tokens.
 - Bearer tokens cannot mint, list, or revoke credentials; administer identities; change passwords or preferences; or complete browser onboarding.
-- `RUNTRACE_OWNER_RECOVERY_PASSWORD` applies owner recovery at startup and revokes existing sessions; remove the variable after the recovery start.
+- `MONO_OWNER_RECOVERY_PASSWORD` applies owner recovery at startup and revokes existing sessions; remove the variable after the recovery start.
 
 Access matrix:
 
@@ -258,7 +258,7 @@ Endpoints:
 - Create/list/get/update/delete.
 - Visibility and sort order.
 - Revision tracking.
-- Portable `runtrace-visualization` JSON export/import; source-bound `run_metrics` exports freeze their resolved rows into an inline dataset so the document can cross projects without a run-ID dependency.
+- Portable `mono-visualization` JSON export/import; source-bound `run_metrics` exports freeze their resolved rows into an inline dataset so the document can cross projects without a run-ID dependency.
 - Inline datasets, live project datasets for runs/experiments, and source-run-bound `run_metrics` datasets.
 - Lifecycle, disposition, tag, and limit filters for live datasets.
 
@@ -297,13 +297,13 @@ Visualization endpoints:
 
 ## Python SDK
 
-The `runtrace-ai` Python package supports:
+The `mono-ai` Python package supports:
 
 - Explicit base URL and token, `api_key` compatibility alias, and strict or best-effort behavior.
 - Project search plus a project-creation helper for development mode; fixed-grant production bearer tokens cannot create projects.
 - Module-level `configure`, `run`, `search`, and `create_project` convenience helpers.
 - Context-managed run lifecycle.
-- Attachment to an existing accessible, running, same-project run with `run_id` or `RUNTRACE_RUN_ID`.
+- Attachment to an existing accessible, running, same-project run with `run_id` or `MONO_RUN_ID`.
 - Automatic command, working directory, Git branch/commit/dirty state, hostname, platform, Python, executable, arguments, CPU, and memory metadata.
 - Single/batched metrics and parameters.
 - Structured events, reasoning events, tags, and run-relationship events.
@@ -317,16 +317,16 @@ The `runtrace-ai` Python package supports:
 
 Commands:
 
-- `runtrace --version`
-- `runtrace auth TOKEN [--base-url URL]`; `TOKEN=-` reads one line from stdin.
-- `runtrace context PROJECT`
-- `runtrace search PROJECT QUERY [--limit N]`
-- `runtrace exec --project PROJECT --name NAME --hypothesis TEXT [--reasoning TEXT] [--base-url URL] -- COMMAND...`
-- `runtrace integrations install codex|claude [--ref REF] [--dry-run]`
+- `mono --version`
+- `mono auth TOKEN [--base-url URL]`; `TOKEN=-` reads one line from stdin.
+- `mono context PROJECT`
+- `mono search PROJECT QUERY [--limit N]`
+- `mono exec --project PROJECT --name NAME --hypothesis TEXT [--reasoning TEXT] [--base-url URL] -- COMMAND...`
+- `mono integrations install codex|claude [--ref REF] [--dry-run]`
 
-`runtrace exec` merges and forwards child stdout/stderr, parses flushed `RUNTRACE_METRIC` and `RUNTRACE_EVENT` lines, finishes on exit zero, crashes on nonzero exit, and returns the child's exit code.
+`mono exec` merges and forwards child stdout/stderr, parses flushed `MONO_METRIC` and `MONO_EVENT` lines, finishes on exit zero, crashes on nonzero exit, and returns the child's exit code.
 
-Connection precedence is explicit arguments, environment, saved credentials, then the known local-development connection. A saved token is reused only when its saved base URL matches the resolved origin. Credentials use an XDG-aware user path, directory mode `0700`, file mode `0600`, and atomic replacement. `RUNTRACE_API_TOKEN` and `RUNTRACE_API_KEY` are supported environment names.
+Connection precedence is explicit arguments, environment, saved credentials, then the known local-development connection. A saved token is reused only when its saved base URL matches the resolved origin. Credentials use an XDG-aware user path, directory mode `0700`, file mode `0600`, and atomic replacement. `MONO_API_TOKEN` and `MONO_API_KEY` are supported environment names.
 
 ## MCP server
 
@@ -345,7 +345,7 @@ Its 32 tools are:
 ## Operations, distribution, and integrations
 
 - Python 3.11+ package with `mcp`, `server`, `embeddings`, and `dev` extras.
-- `runtrace` and `runtrace-mcp` console entry points.
+- `mono` and `mono-mcp` console entry points.
 - PostgreSQL 17 with pgvector, API, web, and optional MCP Compose services.
 - Persistent PostgreSQL, artifact, and optional embedding-model volumes.
 - Alembic migrations through PostgreSQL HNSW repair schema version 14; the search-vector HNSW index is created idempotently on fresh and upgraded databases.
@@ -368,10 +368,10 @@ Its 32 tools are:
 These are not public features and should not be advertised as such:
 
 - `AuditEvent` rows record major mutations and idempotency keys, but there is no public audit-history API or web viewer.
-- `WorkerObservation` supplies a recorded-worker count for seeded data; RunTrace does not provide worker discovery, dispatch, or a live heartbeat protocol.
+- `WorkerObservation` supplies a recorded-worker count for seeded data; Mono does not provide worker discovery, dispatch, or a live heartbeat protocol.
 - Passkey/WebAuthn database tables remain for migration compatibility; active authentication is username/password plus agent tokens.
 - Research exclusions guide agents but do not enforce or dispatch worker behavior.
-- RunTrace stores and supervises experiments; it does not execute queued experiments on its own.
+- Mono stores and supervises experiments; it does not execute queued experiments on its own.
 
 ## Verification
 

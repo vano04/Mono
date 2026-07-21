@@ -25,7 +25,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export const runtrace = {
+export const mono = {
   projects: () => api<Project[]>("/api/v1/projects"),
   createProject: (body: { name: string; slug: string; description: string; repository_url?: string }) =>
     api<Project>("/api/v1/projects", { method: "POST", body: JSON.stringify(body) }),

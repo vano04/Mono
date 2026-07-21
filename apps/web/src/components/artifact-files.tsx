@@ -10,7 +10,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import type { Artifact } from "@/lib/types"
 import { useI18n } from "@/components/i18n-provider"
 
@@ -44,7 +44,7 @@ export function ArtifactFiles({ artifacts }: { artifacts: Artifact[] }) {
 
   async function openPreview(artifact: Artifact) {
     setSelected(artifact); setPreview(null); setPending(true)
-    try { setPreview(await runtrace.previewArtifact(artifact.id)) }
+    try { setPreview(await mono.previewArtifact(artifact.id)) }
     catch (error) { toast.error(error instanceof Error ? error.message : t("Could not preview artifact")); setSelected(null) }
     finally { setPending(false) }
   }
@@ -77,7 +77,7 @@ export function ArtifactUploadDialog({ runId, onUploaded }: { runId: string; onU
     event.preventDefault()
     if (!file) return
     setPending(true)
-    try { await runtrace.uploadArtifact(runId, file, kind); toast.success(t("Artifact saved")); setOpen(false); setFile(null); onUploaded() }
+    try { await mono.uploadArtifact(runId, file, kind); toast.success(t("Artifact saved")); setOpen(false); setFile(null); onUploaded() }
     catch (error) { toast.error(error instanceof Error ? error.message : t("Could not upload artifact")) }
     finally { setPending(false) }
   }

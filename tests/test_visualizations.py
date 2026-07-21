@@ -1,6 +1,6 @@
 def inline_spec(title="Loss by step"):
     return {
-        "$schema": "https://runtrace.dev/schemas/rtvis/v1.json",
+        "$schema": "https://mono.dev/schemas/rtvis/v1.json",
         "version": 1,
         "title": title,
         "description": "Portable loss history",
@@ -49,7 +49,7 @@ def test_visualization_crud_dashboard_and_portable_round_trip(fresh_database):
     exported = fresh_database.get(f"/api/v1/projects/dense-optimizer/visualizations/{item['id']}/export")
     assert exported.status_code == 200
     document = exported.json()
-    assert document["format"] == "runtrace-visualization"
+    assert document["format"] == "mono-visualization"
     imported = fresh_database.post(
         "/api/v1/projects/flash-attention-kernel/visualizations/import",
         json={"document": document, "name": "Imported optimizer loss"},
@@ -67,7 +67,7 @@ def test_visualization_guide_preview_and_strict_validation(fresh_database):
     assert guide.status_code == 200
     assert "card" in guide.json()["supported_nodes"]
     assert "javascript" in guide.json()["supported_nodes"]
-    assert guide.json()["dataset_sources"]["runtrace"]["queries"] == ["runs", "experiments", "run_metrics"]
+    assert guide.json()["dataset_sources"]["mono"]["queries"] == ["runs", "experiments", "run_metrics"]
     assert "autoresearch_progress" in {item["id"] for item in guide.json()["existing_dashboard"]["built_ins"]}
 
     preview = fresh_database.post("/api/v1/projects/dense-optimizer/visualizations/preview", json=inline_spec())
@@ -85,7 +85,7 @@ def test_visualization_guide_preview_and_strict_validation(fresh_database):
         "height": 280,
         "markup": '<div class="card"><button class="btn">Select</button><div id="value"></div></div>',
         "styles": "#value { color: var(--primary); }",
-        "script": "document.querySelector('#value').textContent = window.runtrace.datasets.loss.length;",
+        "script": "document.querySelector('#value').textContent = window.mono.datasets.loss.length;",
     }
     accepted = fresh_database.post("/api/v1/projects/dense-optimizer/visualizations/preview", json=widget)
     assert accepted.status_code == 200, accepted.text
@@ -101,11 +101,11 @@ def test_visualization_guide_preview_and_strict_validation(fresh_database):
     assert rejected.status_code == 422
 
 
-def test_runtrace_dataset_is_resolved_from_live_project_records(fresh_database):
+def test_mono_dataset_is_resolved_from_live_project_records(fresh_database):
     spec = {
         "version": 1,
         "title": "Kept runs",
-        "datasets": {"runs": {"source": "runtrace", "query": "runs", "filters": {"lifecycle": "completed", "limit": 3}}},
+        "datasets": {"runs": {"source": "mono", "query": "runs", "filters": {"lifecycle": "completed", "limit": 3}}},
         "view": {
             "type": "table",
             "dataset": "runs",
@@ -130,7 +130,7 @@ def test_dashboard_visualizations_remain_separate_from_experiment_result_types(f
     run_metrics_spec = {
         "version": 1,
         "title": "Called methods",
-        "datasets": {"metrics": {"source": "runtrace", "query": "run_metrics", "filters": {"limit": 10}}},
+        "datasets": {"metrics": {"source": "mono", "query": "run_metrics", "filters": {"limit": 10}}},
         "view": {"type": "table", "dataset": "metrics", "columns": [{"key": "name", "label": "Metric"}, {"key": "value", "label": "Value"}]},
     }
     created = fresh_database.post(
@@ -195,7 +195,7 @@ def test_custom_experiment_result_type_renders_current_run_metrics(fresh_databas
     spec = {
         "version": 1,
         "title": "Top called methods",
-        "datasets": {"metrics": {"source": "runtrace", "query": "run_metrics", "filters": {"latest_per_name": True, "sort_by": "value", "order": "desc", "limit": 10}}},
+        "datasets": {"metrics": {"source": "mono", "query": "run_metrics", "filters": {"latest_per_name": True, "sort_by": "value", "order": "desc", "limit": 10}}},
         "view": {"type": "chart", "chart": "bar", "dataset": "metrics", "x": "name", "y": "value"},
     }
     created_type = fresh_database.post(

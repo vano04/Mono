@@ -10,7 +10,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import type { ExperimentResultVisualizationType } from "@/lib/types"
 import { useI18n } from "@/components/i18n-provider"
 
@@ -24,7 +24,7 @@ export function EditExperimentDialog({ slug, id, open, onOpenChange, onUpdated }
   onUpdated: () => void
 }) {
   const { t } = useI18n()
-  const [experiment, setExperiment] = useState<Awaited<ReturnType<typeof runtrace.experiment>> | null>(null)
+  const [experiment, setExperiment] = useState<Awaited<ReturnType<typeof mono.experiment>> | null>(null)
   const [pending, setPending] = useState(false)
   const [title, setTitle] = useState("")
   const [hypothesis, setHypothesis] = useState("")
@@ -36,7 +36,7 @@ export function EditExperimentDialog({ slug, id, open, onOpenChange, onUpdated }
   useEffect(() => {
     if (!open) return
     let active = true
-    Promise.all([runtrace.experiment(slug, id), runtrace.resultVisualizationTypes(slug)]).then(([item, types]) => {
+    Promise.all([mono.experiment(slug, id), mono.resultVisualizationTypes(slug)]).then(([item, types]) => {
       if (!active) return
       setExperiment(item)
       setTitle(item.title)
@@ -55,7 +55,7 @@ export function EditExperimentDialog({ slug, id, open, onOpenChange, onUpdated }
     event.preventDefault()
     setPending(true)
     try {
-      await runtrace.updateExperiment(slug, id, {
+      await mono.updateExperiment(slug, id, {
         title,
         hypothesis,
         reasoning,

@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { useTheme } from "next-themes"
 
 import { useAppearance } from "@/components/appearance-provider"
-import { RunTraceLogo } from "@/components/runtrace-logo"
+import { MonoLogo } from "@/components/mono-logo"
 import { OnboardingTour } from "@/components/onboarding-tour"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -66,15 +66,15 @@ function SetupScreen({ status, onComplete }: { status: AuthStatus; onComplete: (
 
   return (
     <main className="min-h-screen bg-background">
-      <header className="flex h-16 items-center border-b px-5 sm:px-8"><RunTraceLogo /></header>
+      <header className="flex h-16 items-center border-b px-5 sm:px-8"><MonoLogo /></header>
       <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-10 sm:px-8 sm:py-16">
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm lg:grid lg:grid-cols-[0.8fr_1.2fr]">
           <section className="border-b bg-muted/25 p-7 lg:border-r lg:border-b-0 lg:p-10">
             <h1 className="max-w-sm text-2xl font-semibold tracking-tight">
-              {isInvite ? t("Finish setting up your identity") : isBootstrap ? t("Let’s set up your RunTrace instance") : t("Welcome back")}
+              {isInvite ? t("Finish setting up your identity") : isBootstrap ? t("Let’s set up your Mono instance") : t("Welcome back")}
             </h1>
             <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
-              {isInvite ? t("Choose a password to activate the access an admin granted you.") : isBootstrap ? t("Create the first owner account and choose a strong password.") : t("Sign in with your RunTrace identity.")}
+              {isInvite ? t("Choose a password to activate the access an admin granted you.") : isBootstrap ? t("Create the first owner account and choose a strong password.") : t("Sign in with your Mono identity.")}
             </p>
             <ol className="mt-10 space-y-7">
               {[
@@ -89,7 +89,7 @@ function SetupScreen({ status, onComplete }: { status: AuthStatus; onComplete: (
           </section>
 
           <section className="p-7 lg:p-10">
-            <h2 className="text-xl font-semibold tracking-tight">{isInvite ? t("Set your password") : isBootstrap ? t("Secure this instance") : t("Sign in to RunTrace")}</h2>
+            <h2 className="text-xl font-semibold tracking-tight">{isInvite ? t("Set your password") : isBootstrap ? t("Secure this instance") : t("Sign in to Mono")}</h2>
             <p className="mt-2 text-sm text-muted-foreground">{isInvite ? t("This setup link can only be used once.") : isBootstrap ? t("Create the owner username and password.") : t("Enter your username and password.")}</p>
             <form className="mt-7 space-y-5" onSubmit={(event) => { event.preventDefault(); void submit() }}>
               {!isInvite ? <div className="space-y-2"><Label htmlFor="username">{t("Username")}</Label><Input id="username" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9][A-Za-z0-9._-]*" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="owner" autoCapitalize="none" spellCheck={false} required /><p className="text-xs text-muted-foreground">{t("3–32 letters, numbers, dots, underscores, or hyphens.")}</p></div> : null}
@@ -97,7 +97,7 @@ function SetupScreen({ status, onComplete }: { status: AuthStatus; onComplete: (
               {isBootstrap || isInvite ? <div className="space-y-2"><Label htmlFor="password-confirmation">{t("Confirm password")}</Label><Input id="password-confirmation" type="password" autoComplete="new-password" minLength={12} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required /></div> : null}
               <Button type="submit" size="lg" className="w-full" disabled={busy}>{busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <KeyRound data-icon="inline-start" />}<span>{busy ? t("Please wait…") : isBootstrap ? t("Create owner") : isInvite ? t("Set password & continue") : t("Sign in")}</span></Button>
             </form>
-            <div className="mt-5 flex items-start justify-center gap-2 text-xs leading-5 text-muted-foreground"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" /><span>{t("RunTrace stores a salted scrypt hash, never the password itself. On plain HTTP, use this only on a trusted LAN.")}</span></div>
+            <div className="mt-5 flex items-start justify-center gap-2 text-xs leading-5 text-muted-foreground"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" /><span>{t("Mono stores a salted scrypt hash, never the password itself. On plain HTTP, use this only on a trusted LAN.")}</span></div>
           </section>
         </div>
       </div>
@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { status, identity: status.identity, refresh, updatePreferences, signOut: async () => { await auth.logout(); await refresh() } }
   }, [refresh, status, updatePreferences])
 
-  if (!status) return <main className="grid min-h-screen place-items-center"><LoaderCircle className="size-6 animate-spin text-muted-foreground" aria-label={t("Loading RunTrace")} /></main>
+  if (!status) return <main className="grid min-h-screen place-items-center"><LoaderCircle className="size-6 animate-spin text-muted-foreground" aria-label={t("Loading Mono")} /></main>
   if (!status.authenticated || !value) return <SetupScreen status={status} onComplete={refresh} />
   return <AuthContext.Provider value={value}>
     {children}

@@ -1,0 +1,363 @@
+from __future__ import annotations
+
+import atexit
+import json
+import os
+import platform
+import socket
+import subprocess
+import sys
+import threading
+import time
+import uuid
+import warnings
+from collections import deque
+from pathlib import Path
+from typing import Any
+
+import httpx
+import psutil
+
+
+def _git(args: list[str], cwd: str) -> str | None:
+    try:
+        return subprocess.check_output(["git", *args], cwd=cwd, text=True, stderr=subprocess.DEVNULL, timeout=2).strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _metadata(cwd: str) -> dict[str, Any]:
+    return {
+        "host_metadata": {
+            "hostname": socket.gethostname(),
+            "platform": platform.platform(),
+            "cpu_count": psutil.cpu_count(),
+            "memory_bytes": psutil.virtual_memory().total,
+        },
+        "environment_metadata": {
+            "python": sys.version.split()[0],
+            "executable": sys.executable,
+            "argv": sys.argv,
+        },
+        "git_commit": _git(["rev-parse", "HEAD"], cwd),
+        "git_branch": _git(["branch", "--show-current"], cwd),
+        "git_dirty": bool(_git(["status", "--porcelain"], cwd)),
+    }
+
+
+class Mono:
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8000",
+        api_token: str | None = None,
+        strict: bool = False,
+        timeout: float = 5.0,
+        *,
+        api_key: str | None = None,
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.api_token = api_token or api_key
+        self.strict = strict
+        self.client = httpx.Client(
+            base_url=self.base_url,
+            timeout=timeout,
+            headers={"Authorization": f"Bearer {self.api_token}"} if self.api_token else {},
+        )
+        self._buffer: deque[tuple[str, str, dict[str, Any], str]] = deque(maxlen=2000)
+        self._lock = threading.Lock()
+        atexit.register(self._flush_at_exit)
+
+    def _queue_request(self, method: str, path: str, payload: dict[str, Any], request_id: str) -> None:
+        with self._lock:
+            if self._buffer.maxlen is not None and len(self._buffer) >= self._buffer.maxlen:
+                raise BufferError(f"Mono buffer is full ({self._buffer.maxlen} requests)")
+            self._buffer.append((method, path, payload, request_id))
+
+    def _is_buffered(self, request_id: str) -> bool:
+        with self._lock:
+            return any(item[3] == request_id for item in self._buffer)
+
+    def _flush_at_exit(self) -> None:
+        try:
+            self.flush()
+        except Exception as exc:
+            warnings.warn(
+                f"Mono could not flush buffered writes during shutdown: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+    def request(self, method: str, path: str, payload: dict[str, Any] | None = None, *, buffer: bool = False, request_id: str | None = None) -> Any:
+        request_id = request_id or str(uuid.uuid4())
+        try:
+            response = self.client.request(method, path, json=payload, headers={"X-Request-ID": request_id})
+            response.raise_for_status()
+            return response.json() if response.content else None
+        except httpx.HTTPStatusError as exc:
+            if self.strict:
+                raise
+            if buffer and exc.response.status_code >= 500:
+                self._queue_request(method, path, payload or {}, request_id)
+                warnings.warn(f"Mono is unavailable; buffered {method} {path}", RuntimeWarning, stacklevel=2)
+            else:
+                warnings.warn(
+                    f"Mono rejected {method} {path} with HTTP {exc.response.status_code}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            return None
+        except (httpx.RequestError, OSError):
+            if buffer:
+                self._queue_request(method, path, payload or {}, request_id)
+                warnings.warn(f"Mono is unavailable; buffered {method} {path}", RuntimeWarning, stacklevel=2)
+                return None
+            if self.strict:
+                raise
+            return None
+
+    def flush(self) -> int:
+        sent = 0
+        with self._lock:
+            pending = list(self._buffer)
+        for method, path, payload, request_id in pending:
+            try:
+                response = self.client.request(method, path, json=payload, headers={"X-Request-ID": request_id})
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if self.strict:
+                    raise
+                if exc.response.status_code >= 500:
+                    break
+                with self._lock:
+                    if self._buffer and self._buffer[0][3] == request_id:
+                        self._buffer.popleft()
+                warnings.warn(
+                    f"Mono discarded rejected buffered request {method} {path} (HTTP {exc.response.status_code})",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                continue
+            except (httpx.RequestError, OSError):
+                if self.strict:
+                    raise
+                break
+            with self._lock:
+                if self._buffer and self._buffer[0][3] == request_id:
+                    self._buffer.popleft()
+            sent += 1
+        return sent
+
+    def _defer_request(self, method: str, path: str, payload: dict[str, Any]) -> None:
+        self._queue_request(method, path, payload, str(uuid.uuid4()))
+        warnings.warn(f"Mono is unavailable; buffered {method} {path}", RuntimeWarning, stacklevel=3)
+
+    def search(self, project: str, query: str, limit: int = 10, include_archived: bool = False) -> dict[str, Any] | None:
+        return self.request("POST", "/api/v1/search", {"project": project, "query": query, "limit": limit, "include_archived": include_archived})
+
+    def create_project(self, name: str, slug: str, description: str = "") -> dict[str, Any] | None:
+        return self.request("POST", "/api/v1/projects", {"name": name, "slug": slug, "description": description})
+
+    def run(self, project: str, name: str, hypothesis: str = "", reasoning: str = "", tags: list[str] | None = None, **kwargs: Any) -> "Run":
+        return Run(self, project, name, hypothesis, reasoning, tags or [], kwargs)
+
+
+class Run:
+    def __init__(self, client: Mono, project: str, name: str, hypothesis: str, reasoning: str, tags: list[str], options: dict[str, Any]):
+        self.client = client
+        self.project = project
+        self.name = name
+        self.hypothesis = hypothesis
+        self.reasoning = reasoning
+        self.tags = tags
+        self.options = options
+        self.id: str | None = None
+        self.display_id: str | None = None
+        self._finished = False
+
+    def __enter__(self) -> "Run":
+        existing_id = self.options.pop("run_id", None) or os.getenv("MONO_RUN_ID")
+        if existing_id:
+            existing = self.client.request("GET", f"/api/v1/runs/{existing_id}")
+            if not existing:
+                raise RuntimeError(f"MONO_RUN_ID does not identify an accessible run: {existing_id}")
+            if existing.get("lifecycle") != "running":
+                raise RuntimeError(f"MONO_RUN_ID must identify a running run: {existing_id}")
+            project = self.client.request("GET", f"/api/v1/projects/{self.project}")
+            if not project or existing.get("project_id") != project.get("id"):
+                raise RuntimeError(f"MONO_RUN_ID belongs to a different project: {existing_id}")
+            self.id = existing["id"]
+            self.display_id = existing.get("display_id")
+            return self
+        cwd = self.options.pop("working_directory", os.getcwd())
+        configuration = dict(self.options.pop("configuration", {}))
+        configuration["tags"] = self.tags
+        payload = {
+            "name": self.name,
+            "hypothesis": self.hypothesis,
+            "reasoning": self.reasoning,
+            "working_directory": cwd,
+            "command": " ".join(sys.argv),
+            "configuration": configuration,
+            **_metadata(cwd),
+            **self.options,
+        }
+        created = self.client.request("POST", f"/api/v1/projects/{self.project}/runs", payload)
+        if not created:
+            if self.client.strict:
+                raise RuntimeError("Mono server unavailable")
+            return self
+        self.id = created["id"]
+        self.display_id = created["display_id"]
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> bool:
+        if exc is not None and not self._finished:
+            try:
+                self.abort(str(exc))
+            except Exception as tracking_error:
+                warnings.warn(
+                    f"Mono could not record the run failure: {tracking_error}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+        elif not self._finished:
+            self.finish("undecided")
+        return False
+
+    def _send(self, path: str, payload: dict[str, Any], *, buffer: bool = True) -> Any:
+        if not self.id:
+            return None
+        return self.client.request("POST", f"/api/v1/runs/{self.id}/{path}", payload, buffer=buffer)
+
+    def log_metric(self, name: str, value: float, step: int | None = None, timestamp: str | None = None) -> None:
+        self.log_metrics({name: value}, step=step, timestamp=timestamp)
+
+    def log_metrics(self, values: dict[str, float], step: int | None = None, timestamp: str | None = None) -> None:
+        self._send("metrics", {"metrics": [{"name": name, "value": value, "step": step, "timestamp": timestamp} for name, value in values.items()]})
+
+    def log_param(self, name: str, value: Any) -> None:
+        self.log_params({name: value})
+
+    def log_params(self, values: dict[str, Any]) -> None:
+        self._send("parameters", {"parameters": values})
+
+    def log_event(self, message: str, level: str = "info", event_type: str | None = None, metadata: dict[str, Any] | None = None) -> None:
+        self._send("events", {"message": message, "level": level, "event_type": event_type, "metadata": metadata or {}})
+
+    def log_reasoning(self, text: str, stage: str = "during") -> None:
+        self.log_event(text, event_type=f"reasoning.{stage}")
+
+    def set_tags(self, tags: list[str]) -> None:
+        self.tags = tags
+        self.log_param("tags", tags)
+
+    def link_run(self, run_id: str, relationship: str) -> None:
+        self.log_event(f"Linked {run_id} as {relationship}", event_type="run.relationship", metadata={"run_id": run_id, "relationship": relationship})
+
+    def _upload_artifact(self, name: str, content: Any, content_type: str, metadata: dict[str, Any] | None = None, kind: str = "artifact") -> dict[str, Any] | None:
+        if not self.id:
+            return None
+        try:
+            artifact_metadata = {"kind": kind, **(metadata or {})}
+            response = self.client.client.post(
+                f"/api/v1/runs/{self.id}/artifacts",
+                files={"file": (name, content, content_type)},
+                data={"metadata": json.dumps(artifact_metadata)},
+            )
+            response.raise_for_status()
+            return response.json()
+        except (OSError, httpx.HTTPError):
+            if self.client.strict:
+                raise
+            warnings.warn(f"Mono could not upload artifact {name}", RuntimeWarning, stacklevel=2)
+            return None
+
+    def log_artifact(self, path: str, name: str | None = None, metadata: dict[str, Any] | None = None, kind: str = "artifact") -> dict[str, Any] | None:
+        artifact_path = Path(path)
+        try:
+            with artifact_path.open("rb") as handle:
+                return self._upload_artifact(name or artifact_path.name, handle, "application/octet-stream", metadata, kind)
+        except OSError:
+            if self.client.strict:
+                raise
+            warnings.warn(f"Mono could not upload artifact {artifact_path}", RuntimeWarning, stacklevel=2)
+            return None
+
+    def log_text(self, name: str, content: str, kind: str = "log", metadata: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        """Save previewable text output such as stdout, stderr, reports, or logs."""
+        return self._upload_artifact(name, content.encode("utf-8"), "text/plain", metadata, kind)
+
+    def log_config(self, values: dict[str, Any], name: str = "config.json", metadata: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        """Save configuration as both queryable parameters and a versioned JSON artifact."""
+        self.log_params(values)
+        return self._upload_artifact(name, json.dumps(values, indent=2, sort_keys=True).encode("utf-8"), "application/json", metadata, "config")
+
+    def finish(self, outcome: str, result_summary: str | None = None, conclusion: str | None = None) -> None:
+        disposition = {"success": "kept", "partial_success": "kept", "failure": "discarded", "inconclusive": "undecided"}.get(outcome, outcome)
+        self._terminal("finish", {"disposition": disposition, "result_summary": result_summary or "", "conclusion": conclusion or ""})
+
+    def abort(self, reason: str | None = None) -> None:
+        self._terminal("crash", {"error_summary": reason or "Run aborted"})
+
+    def _terminal(self, path: str, payload: dict[str, Any]) -> None:
+        if self._finished or not self.id:
+            return
+        flush_error: Exception | None = None
+        try:
+            self.client.flush()
+        except Exception as exc:
+            flush_error = exc
+        with self.client._lock:
+            pending = bool(self.client._buffer)
+        if pending:
+            self.client._defer_request("POST", f"/api/v1/runs/{self.id}/{path}", payload)
+            self._finished = True
+            if self.client.strict:
+                raise RuntimeError(f"Mono buffered the terminal {path} update behind pending evidence") from flush_error
+            return
+        if flush_error:
+            raise flush_error
+
+        request_id = str(uuid.uuid4())
+        result = self.client.request(
+            "POST",
+            f"/api/v1/runs/{self.id}/{path}",
+            payload,
+            buffer=True,
+            request_id=request_id,
+        )
+        queued = self.client._is_buffered(request_id)
+        if result is not None or queued:
+            self._finished = True
+        if self.client.strict and queued:
+            raise RuntimeError(f"Mono buffered the terminal {path} update")
+
+
+_default = Mono(
+    base_url=os.getenv("MONO_BASE_URL", "http://localhost:8000"),
+    api_token=os.getenv("MONO_API_TOKEN") or os.getenv("MONO_API_KEY"),
+)
+
+
+def configure(
+    base_url: str = "http://localhost:8000",
+    api_token: str | None = None,
+    strict: bool = False,
+    *,
+    api_key: str | None = None,
+) -> Mono:
+    global _default
+    _default = Mono(base_url=base_url, api_token=api_token or api_key, strict=strict)
+    return _default
+
+
+def run(project: str, hypothesis: str, reasoning: str = "", name: str | None = None, tags: list[str] | None = None, **kwargs: Any) -> Run:
+    return _default.run(project, name or hypothesis[:80], hypothesis, reasoning, tags, **kwargs)
+
+
+def search(project: str, query: str, limit: int = 10) -> dict[str, Any] | None:
+    return _default.search(project, query, limit)
+
+
+def create_project(name: str, slug: str, description: str = "") -> dict[str, Any] | None:
+    return _default.create_project(name, slug, description)

@@ -1,0 +1,2 @@
+Synthetic Mono SDK artifact.
+No credentials or production data.

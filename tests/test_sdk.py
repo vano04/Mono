@@ -1,11 +1,11 @@
 import httpx
 import pytest
 
-from runtrace.client import RunTrace
+from mono.client import Mono
 
 
 def test_sdk_buffers_metrics_during_network_outage(fresh_database):
-    client = RunTrace(base_url="http://127.0.0.1:1", strict=False, timeout=0.01)
+    client = Mono(base_url="http://127.0.0.1:1", strict=False, timeout=0.01)
     result = client.request("POST", "/api/v1/runs/missing/metrics", {"metrics": [{"name": "loss", "value": 1.0}]}, buffer=True)
     assert result is None
     assert len(client._buffer) == 1
@@ -17,7 +17,7 @@ def test_sdk_buffers_metrics_during_network_outage(fresh_database):
     ("parameters", {"parameters": {"rank": 4}}),
 ])
 def test_strict_sdk_does_not_buffer_rejected_writes(fresh_database, path, payload):
-    client = RunTrace(base_url="http://testserver", strict=True)
+    client = Mono(base_url="http://testserver", strict=True)
     client.client.close()
     client.client = fresh_database
 
@@ -32,7 +32,7 @@ def test_strict_sdk_does_not_buffer_rejected_writes(fresh_database, path, payloa
 
 
 def test_best_effort_sdk_drops_permanently_rejected_buffered_writes(fresh_database):
-    client = RunTrace(base_url="http://testserver", strict=False)
+    client = Mono(base_url="http://testserver", strict=False)
     client.client.close()
     client.client = fresh_database
 
@@ -58,7 +58,7 @@ def test_best_effort_sdk_drops_permanently_rejected_buffered_writes(fresh_databa
 
 
 def test_strict_sdk_flush_retains_and_raises_rejected_buffered_write(fresh_database):
-    client = RunTrace(base_url="http://testserver", strict=True)
+    client = Mono(base_url="http://testserver", strict=True)
     client.client.close()
     client.client = fresh_database
     client._buffer.append((
@@ -78,7 +78,7 @@ def test_strict_sdk_flush_retains_and_raises_rejected_buffered_write(fresh_datab
 
 
 def test_strict_sdk_flush_raises_transport_failure_and_shutdown_warns():
-    client = RunTrace(base_url="http://127.0.0.1:1", strict=True, timeout=0.01)
+    client = Mono(base_url="http://127.0.0.1:1", strict=True, timeout=0.01)
     client._buffer.append((
         "POST",
         "/api/v1/runs/missing/metrics",
@@ -100,7 +100,7 @@ def test_5xx_buffering_respects_strict_mode_and_never_evicts_when_full():
     def unavailable(request):
         return httpx.Response(503, json={"detail": "unavailable"}, request=request)
 
-    best_effort = RunTrace(base_url="http://testserver", strict=False)
+    best_effort = Mono(base_url="http://testserver", strict=False)
     best_effort.client.close()
     best_effort.client = httpx.Client(base_url="http://testserver", transport=httpx.MockTransport(unavailable))
     with pytest.warns(RuntimeWarning, match="buffered"):
@@ -114,7 +114,7 @@ def test_5xx_buffering_respects_strict_mode_and_never_evicts_when_full():
     best_effort._buffer.clear()
     best_effort.client.close()
 
-    strict = RunTrace(base_url="http://testserver", strict=True)
+    strict = Mono(base_url="http://testserver", strict=True)
     strict.client.close()
     strict.client = httpx.Client(base_url="http://testserver", transport=httpx.MockTransport(unavailable))
     with pytest.raises(httpx.HTTPStatusError):
@@ -124,7 +124,7 @@ def test_5xx_buffering_respects_strict_mode_and_never_evicts_when_full():
 
 
 def test_terminal_flushes_buffered_evidence_before_finishing(fresh_database):
-    client = RunTrace(base_url="http://testserver", strict=True)
+    client = Mono(base_url="http://testserver", strict=True)
     client.client.close()
     client.client = fresh_database
     project = client.create_project("Buffered SDK", "buffered-sdk")
@@ -148,7 +148,7 @@ def test_terminal_flushes_buffered_evidence_before_finishing(fresh_database):
 
 
 def test_terminal_is_queued_after_evidence_during_persistent_outage(fresh_database):
-    client = RunTrace(base_url="http://testserver", strict=True)
+    client = Mono(base_url="http://testserver", strict=True)
     client.client.close()
     client.client = fresh_database
     project = client.create_project("Persistent outage", "persistent-outage")
@@ -175,7 +175,7 @@ def test_terminal_is_queued_after_evidence_during_persistent_outage(fresh_databa
 
 
 def test_manual_abort_is_not_repeated_by_context_exit(fresh_database):
-    client = RunTrace(base_url="http://testserver", strict=True)
+    client = Mono(base_url="http://testserver", strict=True)
     client.client.close()
     client.client = fresh_database
     project = client.create_project("Abort once", "abort-once")
@@ -191,7 +191,7 @@ def test_manual_abort_is_not_repeated_by_context_exit(fresh_database):
 
 
 def test_sdk_covers_project_search_run_logging_and_artifacts(fresh_database, tmp_path):
-    client = RunTrace(base_url="http://testserver", strict=True)
+    client = Mono(base_url="http://testserver", strict=True)
     client.client.close()
     client.client = fresh_database
 
@@ -229,7 +229,7 @@ def test_sdk_covers_project_search_run_logging_and_artifacts(fresh_database, tmp
 
 
 def test_sdk_context_manager_crashes_run_on_exception(fresh_database):
-    client = RunTrace(base_url="http://testserver", strict=True)
+    client = Mono(base_url="http://testserver", strict=True)
     client.client.close()
     client.client = fresh_database
     try:
@@ -242,15 +242,15 @@ def test_sdk_context_manager_crashes_run_on_exception(fresh_database):
     assert detail["result_summary"] == "boom"
 
 
-def test_sdk_attaches_to_runtrace_run_id_without_creating_a_duplicate(fresh_database, monkeypatch):
-    client = RunTrace(base_url="http://testserver", strict=True)
+def test_sdk_attaches_to_mono_run_id_without_creating_a_duplicate(fresh_database, monkeypatch):
+    client = Mono(base_url="http://testserver", strict=True)
     client.client.close()
     client.client = fresh_database
     created = fresh_database.post(
         "/api/v1/projects/dense-optimizer/runs",
         json={"name": "Created by MCP", "hypothesis": "One execution has one run"},
     ).json()
-    monkeypatch.setenv("RUNTRACE_RUN_ID", created["id"])
+    monkeypatch.setenv("MONO_RUN_ID", created["id"])
 
     with client.run("dense-optimizer", "SDK should attach") as tracked:
         assert tracked.id == created["id"]

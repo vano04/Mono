@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mono"
+  short_description: "Claim, run, and preserve shared experiments"
+  default_prompt: "Use $mono to claim and execute one evidence-driven experiment, then preserve its result."

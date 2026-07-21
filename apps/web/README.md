@@ -1,6 +1,6 @@
-# RunTrace web application
+# Mono web application
 
-This directory contains the maintained Next.js frontend for RunTrace. It is built by the root `docker-compose.yml` and proxies browser API requests to the FastAPI service through `INTERNAL_API_URL`.
+This directory contains the maintained Next.js frontend for Mono. It is built by the root `docker-compose.yml` and proxies browser API requests to the FastAPI service through `INTERNAL_API_URL`.
 
 ## Develop locally
 

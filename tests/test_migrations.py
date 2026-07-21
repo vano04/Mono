@@ -7,8 +7,8 @@ from types import SimpleNamespace
 from alembic import command
 from alembic.config import Config
 
-from runtrace_api.config import ROOT, settings
-from runtrace_api.models import SearchDocument
+from mono_api.config import ROOT, settings
+from mono_api.models import SearchDocument
 
 
 def test_existing_native_database_is_upgraded_to_current_schema(monkeypatch, tmp_path):

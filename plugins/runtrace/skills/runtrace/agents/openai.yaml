@@ -1,4 +1,0 @@
-interface:
-  display_name: "RunTrace"
-  short_description: "Claim, run, and preserve shared experiments"
-  default_prompt: "Use $runtrace to claim and execute one evidence-driven experiment, then preserve its result."

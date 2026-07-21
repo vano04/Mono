@@ -25,10 +25,10 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Building and starting RunTrace..."
+echo "Building and starting Mono..."
 compose up -d --build --wait
 
-echo "RunTrace is ready."
+echo "Mono is ready."
 compose ps
 echo "Web: http://localhost:3000"
 echo "API: http://localhost:8000"

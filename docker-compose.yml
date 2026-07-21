@@ -3,45 +3,45 @@ services:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: runtrace
-      POSTGRES_USER: runtrace
-      POSTGRES_PASSWORD: runtrace
+      POSTGRES_DB: mono
+      POSTGRES_USER: mono
+      POSTGRES_PASSWORD: mono
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U runtrace"]
+      test: ["CMD-SHELL", "pg_isready -U mono"]
       interval: 3s
       timeout: 3s
       retries: 20
     volumes:
-      - runtrace-postgres:/var/lib/postgresql/data
+      - mono-postgres:/var/lib/postgresql/data
 
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
     environment:
-      RUNTRACE_DATABASE_URL: postgresql+psycopg://runtrace:runtrace@postgres:5432/runtrace
-      RUNTRACE_ARTIFACT_PATH: /data/artifacts
-      RUNTRACE_CORS_ORIGINS: "${RUNTRACE_CORS_ORIGINS:-http://localhost:3000}"
-      RUNTRACE_SEED_DEMO: "${RUNTRACE_DEV:-false}"
-      RUNTRACE_DEV: "${RUNTRACE_DEV:-false}"
-      RUNTRACE_DEMO: "${RUNTRACE_DEMO:-false}"
-      RUNTRACE_AUTO_MIGRATE: "false"
-      RUNTRACE_EMBEDDINGS_ENABLED: "${RUNTRACE_EMBEDDINGS_ENABLED:-false}"
-      RUNTRACE_EMBEDDING_CACHE_PATH: /data/models
-      RUNTRACE_SECURE_SESSION_COOKIE: "${RUNTRACE_SECURE_SESSION_COOKIE:-false}"
-      RUNTRACE_OWNER_RECOVERY_PASSWORD: "${RUNTRACE_OWNER_RECOVERY_PASSWORD:-}"
-      RUNTRACE_SESSION_TTL_HOURS: "${RUNTRACE_SESSION_TTL_HOURS:-168}"
-      RUNTRACE_SETUP_LINK_TTL_HOURS: "${RUNTRACE_SETUP_LINK_TTL_HOURS:-24}"
-      RUNTRACE_CLAIM_TIMEOUT_SECONDS: "${RUNTRACE_CLAIM_TIMEOUT_SECONDS:-300}"
-      RUNTRACE_MAX_ARTIFACT_SIZE: "${RUNTRACE_MAX_ARTIFACT_SIZE:-10485760}"
+      MONO_DATABASE_URL: postgresql+psycopg://mono:mono@postgres:5432/mono
+      MONO_ARTIFACT_PATH: /data/artifacts
+      MONO_CORS_ORIGINS: "${MONO_CORS_ORIGINS:-http://localhost:3000}"
+      MONO_SEED_DEMO: "${MONO_DEV:-false}"
+      MONO_DEV: "${MONO_DEV:-false}"
+      MONO_DEMO: "${MONO_DEMO:-false}"
+      MONO_AUTO_MIGRATE: "false"
+      MONO_EMBEDDINGS_ENABLED: "${MONO_EMBEDDINGS_ENABLED:-false}"
+      MONO_EMBEDDING_CACHE_PATH: /data/models
+      MONO_SECURE_SESSION_COOKIE: "${MONO_SECURE_SESSION_COOKIE:-false}"
+      MONO_OWNER_RECOVERY_PASSWORD: "${MONO_OWNER_RECOVERY_PASSWORD:-}"
+      MONO_SESSION_TTL_HOURS: "${MONO_SESSION_TTL_HOURS:-168}"
+      MONO_SETUP_LINK_TTL_HOURS: "${MONO_SETUP_LINK_TTL_HOURS:-24}"
+      MONO_CLAIM_TIMEOUT_SECONDS: "${MONO_CLAIM_TIMEOUT_SECONDS:-300}"
+      MONO_MAX_ARTIFACT_SIZE: "${MONO_MAX_ARTIFACT_SIZE:-10485760}"
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "8000:8000"
     volumes:
-      - runtrace-artifacts:/data/artifacts
-      - runtrace-models:/data/models
+      - mono-artifacts:/data/artifacts
+      - mono-models:/data/models
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
       interval: 10s
@@ -55,10 +55,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    command: ["runtrace-mcp"]
+    command: ["mono-mcp"]
     environment:
-      RUNTRACE_BASE_URL: http://api:8000
-      RUNTRACE_API_TOKEN: "${RUNTRACE_API_TOKEN:-}"
+      MONO_BASE_URL: http://api:8000
+      MONO_API_TOKEN: "${MONO_API_TOKEN:-}"
     depends_on:
       api:
         condition: service_healthy
@@ -86,6 +86,6 @@ services:
     init: true
 
 volumes:
-  runtrace-postgres:
-  runtrace-artifacts:
-  runtrace-models:
+  mono-postgres:
+  mono-artifacts:
+  mono-models:

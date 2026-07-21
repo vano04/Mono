@@ -1,0 +1,12 @@
+services:
+  api:
+    image: mono-integration-test-api:latest
+    build: !reset null
+    ports: !override
+      - "8100:8000"
+
+  web:
+    image: mono-integration-test-web:latest
+    build: !reset null
+    ports: !override
+      - "3100:3000"

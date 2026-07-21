@@ -11,7 +11,7 @@ import { StatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import type { Experiment, Run } from "@/lib/types"
 
 export type RecordSelection = { kind: "experiment" | "run"; id: string } | null
@@ -121,8 +121,8 @@ export function RecordDetailDialog({ selection, slug, baselineId, metric, canEdi
   useEffect(() => {
     if (!selection) return
     let active = true
-    const recordRequest = selection.kind === "run" ? runtrace.run(selection.id) : runtrace.experiment(slug, selection.id)
-    const baselineRequest = selection.kind === "run" && baselineId && baselineId !== selection.id ? runtrace.run(baselineId) : Promise.resolve(null)
+    const recordRequest = selection.kind === "run" ? mono.run(selection.id) : mono.experiment(slug, selection.id)
+    const baselineRequest = selection.kind === "run" && baselineId && baselineId !== selection.id ? mono.run(baselineId) : Promise.resolve(null)
     Promise.all([recordRequest, baselineRequest]).then(([value, baseline]) => {
       if (!active) return
       setRecord(value)
@@ -135,7 +135,7 @@ export function RecordDetailDialog({ selection, slug, baselineId, metric, canEdi
 
   useEffect(() => {
     if (!selection || selection.kind !== "run" || !selectedRunning) return
-    const refresh = () => runtrace.run(selection.id).then(setRecord).catch(() => undefined)
+    const refresh = () => mono.run(selection.id).then(setRecord).catch(() => undefined)
     const current = recordRef.current as Run | null
     const metricIds = Object.values(current?.metrics ?? {}).flatMap((series) => series.points.map((point) => point.id))
     const eventIds = current?.events?.map((event) => event.id) ?? []
@@ -167,7 +167,7 @@ export function RecordDetailDialog({ selection, slug, baselineId, metric, canEdi
 
   function reloadRun() {
     if (!selection || selection.kind !== "run") return
-    runtrace.run(selection.id).then(setRecord).catch((error) => toast.error(error instanceof Error ? error.message : "Could not refresh run details"))
+    mono.run(selection.id).then(setRecord).catch((error) => toast.error(error instanceof Error ? error.message : "Could not refresh run details"))
   }
 
   const visibleRecord = record?.id === selection?.id ? record : null

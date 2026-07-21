@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Archive, ArrowLeft, BookOpen, LayoutDashboard, Menu, Search, Settings } from "lucide-react"
 
-import { RunTraceLogo } from "@/components/runtrace-logo"
+import { MonoLogo } from "@/components/mono-logo"
 import { AccountMenu } from "@/components/account-menu"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -27,7 +27,7 @@ function ProjectNavigation({ project, accessRole, mobile = false }: { project: P
   const { canEdit } = projectCapabilities(accessRole)
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-20 items-center border-b px-5"><RunTraceLogo /></div>
+      <div className="flex h-20 items-center border-b px-5"><MonoLogo /></div>
       <div className="border-b px-3 py-4">
         <Button variant="ghost" className="w-full justify-start" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" /><span className="truncate">{project.name}</span></Button>
       </div>
@@ -46,7 +46,7 @@ function ProjectNavigation({ project, accessRole, mobile = false }: { project: P
       <div className="mt-auto border-t p-3">
         <Button variant="ghost" className="w-full justify-start" render={<Link href="/docs" />} nativeButton={false}><BookOpen data-icon="inline-start" />{t("Docs")}</Button>
         <div className="mt-1"><AccountMenu /></div>
-        {mobile ? <p className="px-3 pt-2 text-xs text-muted-foreground">RunTrace v0.1</p> : null}
+        {mobile ? <p className="px-3 pt-2 text-xs text-muted-foreground">Mono v0.1</p> : null}
       </div>
     </div>
   )
@@ -62,7 +62,7 @@ export function ProjectShell({ project, accessRole, children }: { project: Proje
           <Sheet>
             <SheetTrigger render={<Button variant="ghost" size="icon" aria-label={t("Open navigation")} />}><Menu /></SheetTrigger>
             <SheetContent side="left" className="w-[280px] p-0">
-              <SheetHeader className="sr-only"><SheetTitle>{t("Project navigation")}</SheetTitle><SheetDescription>{t("Navigate RunTrace project views.")}</SheetDescription></SheetHeader>
+              <SheetHeader className="sr-only"><SheetTitle>{t("Project navigation")}</SheetTitle><SheetDescription>{t("Navigate Mono project views.")}</SheetDescription></SheetHeader>
               <ProjectNavigation project={project} accessRole={accessRole} mobile />
             </SheetContent>
           </Sheet>

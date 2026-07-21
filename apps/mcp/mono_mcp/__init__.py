@@ -1,0 +1,2 @@
+"""Mono MCP adapter."""
+

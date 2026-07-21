@@ -1,14 +1,14 @@
 {
-  "name": "runtrace",
+  "name": "mono",
   "interface": {
-    "displayName": "RunTrace"
+    "displayName": "Mono"
   },
   "plugins": [
     {
-      "name": "runtrace",
+      "name": "mono",
       "source": {
         "source": "local",
-        "path": "./plugins/runtrace"
+        "path": "./plugins/mono"
       },
       "policy": {
         "installation": "AVAILABLE",

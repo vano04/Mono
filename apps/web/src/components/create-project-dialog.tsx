@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import type { Project } from "@/lib/types"
 import { useI18n } from "@/components/i18n-provider"
 
@@ -30,7 +30,7 @@ export function CreateProjectDialog({ onCreated }: { onCreated: (project: Projec
     event.preventDefault()
     setPending(true)
     try {
-      const project = await runtrace.createProject({
+      const project = await mono.createProject({
         name: name.trim(), slug: slug.trim(), description: description.trim(),
         ...(repositoryUrl.trim() ? { repository_url: repositoryUrl.trim() } : {}),
       })

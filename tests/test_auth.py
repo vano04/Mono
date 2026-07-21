@@ -3,10 +3,10 @@ from datetime import timedelta
 
 from sqlalchemy import select
 
-from runtrace_api.auth import apply_owner_recovery_password
-from runtrace_api.config import settings
-from runtrace_api.database import SessionLocal
-from runtrace_api.models import ApiToken, AuthSession, Identity, ProjectMembership, now_utc
+from mono_api.auth import apply_owner_recovery_password
+from mono_api.config import settings
+from mono_api.database import SessionLocal
+from mono_api.models import ApiToken, AuthSession, Identity, ProjectMembership, now_utc
 
 
 def test_dev_mode_bypasses_authentication(fresh_database):
@@ -225,7 +225,7 @@ def test_admin_can_create_identity_and_suspend_access(fresh_database, monkeypatc
         ))
         session.commit()
     fresh_database.cookies.clear()
-    fresh_database.cookies.set("runtrace_session", raw_token)
+    fresh_database.cookies.set("mono_session", raw_token)
 
     created = fresh_database.post("/api/v1/auth/identities", json={
         "username": "ada",
@@ -246,7 +246,7 @@ def test_admin_can_create_identity_and_suspend_access(fresh_database, monkeypatc
     assert fresh_database.post("/api/v1/auth/setup", json={"token": replacement.json()["setup_token"], "password": "a secure new password"}).status_code == 200
 
     fresh_database.cookies.clear()
-    fresh_database.cookies.set("runtrace_session", raw_token)
+    fresh_database.cookies.set("mono_session", raw_token)
     suspended = fresh_database.patch(f"/api/v1/auth/identities/{identity_id}", json={"status": "suspended"})
     assert suspended.status_code == 200
     assert suspended.json()["status"] == "suspended"
@@ -269,7 +269,7 @@ def test_owner_cannot_be_demoted_or_suspended(fresh_database, monkeypatch):
             expires_at=now_utc() + timedelta(hours=1),
         ))
         session.commit()
-    fresh_database.cookies.set("runtrace_session", raw_token)
+    fresh_database.cookies.set("mono_session", raw_token)
     response = fresh_database.patch(f"/api/v1/auth/identities/{owner_id}", json={"status": "suspended"})
     assert response.status_code == 409
 
@@ -287,7 +287,7 @@ def test_api_token_authentication_and_revocation(fresh_database, monkeypatch):
             expires_at=now_utc() + timedelta(hours=1),
         ))
         session.commit()
-    fresh_database.cookies.set("runtrace_session", raw_session)
+    fresh_database.cookies.set("mono_session", raw_session)
 
     created = fresh_database.post("/api/v1/auth/tokens", json={"name": "Codex", "expires_in_days": 30})
     assert created.status_code == 201
@@ -319,7 +319,7 @@ def test_api_token_authentication_and_revocation(fresh_database, monkeypatch):
 
     assert fresh_database.get("/api/v1/auth/tokens", headers=headers).status_code == 403
     assert fresh_database.delete(f"/api/v1/auth/tokens/{token_id}", headers=headers).status_code == 403
-    fresh_database.cookies.set("runtrace_session", raw_session)
+    fresh_database.cookies.set("mono_session", raw_session)
     assert fresh_database.delete(f"/api/v1/auth/tokens/{token_id}").status_code == 204
     fresh_database.cookies.clear()
     assert fresh_database.get("/api/v1/projects", headers=headers).status_code == 401
@@ -341,7 +341,7 @@ def test_project_memberships_scoped_tokens_and_admin_token_control(fresh_databas
         ])
         session.commit()
 
-    fresh_database.cookies.set("runtrace_session", owner_session)
+    fresh_database.cookies.set("mono_session", owner_session)
     first = fresh_database.post("/api/v1/projects", json={"name": "First", "slug": "first"}).json()
     second = fresh_database.post("/api/v1/projects", json={"name": "Second", "slug": "second"}).json()
     granted = fresh_database.post("/api/v1/auth/projects/first/members", json={"identity_id": member_id, "role": "viewer"})
@@ -350,7 +350,7 @@ def test_project_memberships_scoped_tokens_and_admin_token_control(fresh_databas
     assert fresh_database.get("/api/v1/projects/first/dashboard").json()["access_role"] == "owner"
 
     fresh_database.cookies.clear()
-    fresh_database.cookies.set("runtrace_session", member_session)
+    fresh_database.cookies.set("mono_session", member_session)
     assert {project["id"] for project in fresh_database.get("/api/v1/projects").json()} == {first["id"]}
     assert fresh_database.get("/api/v1/projects/first").status_code == 200
     assert fresh_database.get("/api/v1/projects/first/dashboard").json()["access_role"] == "viewer"
@@ -358,7 +358,7 @@ def test_project_memberships_scoped_tokens_and_admin_token_control(fresh_databas
     assert fresh_database.post("/api/v1/projects/first/experiments", json={"title": "No", "hypothesis": "viewer"}).status_code == 403
 
     fresh_database.cookies.clear()
-    fresh_database.cookies.set("runtrace_session", owner_session)
+    fresh_database.cookies.set("mono_session", owner_session)
     assert fresh_database.patch(f"/api/v1/auth/projects/first/members/{member_id}", json={"role": "editor"}).status_code == 200
     owner_token = fresh_database.post(
         "/api/v1/auth/tokens",
@@ -392,7 +392,7 @@ def test_project_memberships_scoped_tokens_and_admin_token_control(fresh_databas
     ).status_code == 403
     assert fresh_database.get("/api/v1/auth/identities", headers=owner_token_headers).status_code == 403
 
-    fresh_database.cookies.set("runtrace_session", member_session)
+    fresh_database.cookies.set("mono_session", member_session)
     assert fresh_database.get("/api/v1/projects/first/dashboard").json()["access_role"] == "editor"
     assert fresh_database.post("/api/v1/projects/first/experiments", json={"title": "Allowed", "hypothesis": "editor"}).status_code == 201
     created = fresh_database.post("/api/v1/auth/tokens", json={"name": "First only", "project_ids": [first["id"]]})
@@ -413,7 +413,7 @@ def test_project_memberships_scoped_tokens_and_admin_token_control(fresh_databas
     assert fresh_database.get("/api/v1/auth/tokens", headers=owner_token_headers).status_code == 403
     assert fresh_database.delete(f"/api/v1/auth/tokens/{token_id}", headers=owner_token_headers).status_code == 403
 
-    fresh_database.cookies.set("runtrace_session", owner_session)
+    fresh_database.cookies.set("mono_session", owner_session)
     all_tokens = fresh_database.get("/api/v1/auth/tokens").json()
     listed = next(token for token in all_tokens if token["id"] == token_id)
     assert listed["identity"]["username"] == "member"

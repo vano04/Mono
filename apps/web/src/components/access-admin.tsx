@@ -7,7 +7,7 @@ import { toast } from "sonner"
 
 import { AccountMenu } from "@/components/account-menu"
 import { useAuth } from "@/components/auth-provider"
-import { RunTraceLogo } from "@/components/runtrace-logo"
+import { MonoLogo } from "@/components/mono-logo"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { auth, type ApiToken, type AuthIdentity, type IdentityRole, type IdentityStatus } from "@/lib/auth"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import type { Project } from "@/lib/types"
 
 function formatDate(value?: string | null) {
@@ -82,7 +82,7 @@ function AddIdentityDialog({ onCreated }: { onCreated: (identity: AuthIdentity) 
     <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) reset() }}>
       <DialogTrigger render={<Button />}><Plus data-icon="inline-start" />Add identity</DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{setupPath ? "Identity created" : "Add identity"}</DialogTitle><DialogDescription>{setupPath ? "Send this person their one-time password setup link." : "Grant someone access to this RunTrace instance."}</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{setupPath ? "Identity created" : "Add identity"}</DialogTitle><DialogDescription>{setupPath ? "Send this person their one-time password setup link." : "Grant someone access to this Mono instance."}</DialogDescription></DialogHeader>
         {setupPath ? <SetupLink path={setupPath} /> : (
           <form id="add-identity" className="space-y-4" onSubmit={(event) => {
             event.preventDefault(); setBusy(true)
@@ -139,7 +139,7 @@ function AddTokenDialog({ projects, onCreated }: { projects: Project[]; onCreate
     <DialogTrigger render={<Button type="button" variant="outline" />}><Plus data-icon="inline-start" />Create token</DialogTrigger>
     <DialogContent className="sm:max-w-lg">
       <DialogHeader><DialogTitle>{secret ? "Copy your agent token" : "Create agent token"}</DialogTitle><DialogDescription>{secret ? "This token is shown once. Store it in your secret manager before closing." : "Use a scoped identity token for the Python CLI, MCP, Codex, or Claude Code."}</DialogDescription></DialogHeader>
-      {secret ? <div className="space-y-3"><div className="flex gap-2"><Input value={secret} readOnly className="font-mono text-xs" /><Button type="button" variant="outline" size="icon" aria-label="Copy token" onClick={() => copyText(secret).then(() => { setCopied(true); toast.success("Token copied") }).catch(() => toast.error("Could not copy token"))}>{copied ? <Check /> : <Copy />}</Button></div><p className="text-xs text-muted-foreground">Set it as <code>RUNTRACE_API_TOKEN</code>. RunTrace stores only its SHA-256 digest.</p></div> : <form id="add-token" className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (!submitIntentRef.current) return; submitIntentRef.current = false; void createToken() }}><div className="space-y-2"><Label htmlFor="token-name">Name</Label><Input id="token-name" value={name} onChange={(event) => setName(event.target.value)} required /></div><fieldset className="space-y-2"><Label>Projects</Label><div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border p-3">{projects.map((project) => <label key={project.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedProjectIds.includes(project.id)} onChange={(event) => setProjectIds((current) => { const selected = current ?? projects.map((item) => item.id); return event.target.checked ? [...selected, project.id] : selected.filter((id) => id !== project.id) })} />{project.name}</label>)}</div><p className="text-xs text-muted-foreground">The token can only access the selected projects.</p></fieldset><div className="space-y-2"><Label htmlFor="token-expiry">Expires</Label><select id="token-expiry" value={expires} onChange={(event) => setExpires(event.target.value)} className="h-9 w-full rounded-lg border bg-background px-3 text-sm"><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="">Never</option></select></div></form>}
+      {secret ? <div className="space-y-3"><div className="flex gap-2"><Input value={secret} readOnly className="font-mono text-xs" /><Button type="button" variant="outline" size="icon" aria-label="Copy token" onClick={() => copyText(secret).then(() => { setCopied(true); toast.success("Token copied") }).catch(() => toast.error("Could not copy token"))}>{copied ? <Check /> : <Copy />}</Button></div><p className="text-xs text-muted-foreground">Set it as <code>MONO_API_TOKEN</code>. Mono stores only its SHA-256 digest.</p></div> : <form id="add-token" className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (!submitIntentRef.current) return; submitIntentRef.current = false; void createToken() }}><div className="space-y-2"><Label htmlFor="token-name">Name</Label><Input id="token-name" value={name} onChange={(event) => setName(event.target.value)} required /></div><fieldset className="space-y-2"><Label>Projects</Label><div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border p-3">{projects.map((project) => <label key={project.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedProjectIds.includes(project.id)} onChange={(event) => setProjectIds((current) => { const selected = current ?? projects.map((item) => item.id); return event.target.checked ? [...selected, project.id] : selected.filter((id) => id !== project.id) })} />{project.name}</label>)}</div><p className="text-xs text-muted-foreground">The token can only access the selected projects.</p></fieldset><div className="space-y-2"><Label htmlFor="token-expiry">Expires</Label><select id="token-expiry" value={expires} onChange={(event) => setExpires(event.target.value)} className="h-9 w-full rounded-lg border bg-background px-3 text-sm"><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="">Never</option></select></div></form>}
       <DialogFooter>{secret ? <Button key="saved" type="button" onClick={close}>I saved it</Button> : <Button key="create" form="add-token" type="submit" disabled={busy || selectedProjectIds.length === 0} onClick={() => { submitIntentRef.current = true }}>{busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <KeyRound data-icon="inline-start" />}Create token</Button>}</DialogFooter>
     </DialogContent>
   </Dialog>
@@ -157,7 +157,7 @@ export function AccessAdmin() {
 
   const load = () => auth.identities().then(setIdentities).catch((error) => { toast.error(error instanceof Error ? error.message : "Could not load identities"); setIdentities([]) })
   const loadTokens = () => auth.tokens().then(setTokens).catch((error) => { toast.error(error instanceof Error ? error.message : "Could not load tokens"); setTokens([]) })
-  useEffect(() => { if (authStatus.demo) return; if (isAdmin) void load(); void loadTokens(); void runtrace.projects().then(setProjects) }, [authStatus.demo, isAdmin])
+  useEffect(() => { if (authStatus.demo) return; if (isAdmin) void load(); void loadTokens(); void mono.projects().then(setProjects) }, [authStatus.demo, isAdmin])
 
   const filtered = useMemo(() => (identities ?? []).filter((item) => {
     const matchesQuery = item.username.toLowerCase().includes(query.toLowerCase())
@@ -165,7 +165,7 @@ export function AccessAdmin() {
   }), [identities, query, role, status])
 
   if (authStatus.demo) return <main className="min-h-screen">
-    <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><RunTraceLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />Projects</Button></div><AccountMenu /></header>
+    <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><MonoLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />Projects</Button></div><AccountMenu /></header>
     <section className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-8 sm:py-16"><Empty className="min-h-72 border"><EmptyHeader><EmptyMedia variant="icon"><ShieldCheck /></EmptyMedia><EmptyTitle>Read-only demo</EmptyTitle><EmptyDescription>Identities and agent tokens cannot be managed in demo mode.</EmptyDescription></EmptyHeader></Empty></section>
   </main>
 
@@ -175,9 +175,9 @@ export function AccessAdmin() {
 
   return (
     <main className="min-h-screen">
-      <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><RunTraceLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />Projects</Button></div><AccountMenu /></header>
+      <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><MonoLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />Projects</Button></div><AccountMenu /></header>
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-12">
-        <div className="mb-10 flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><h1 className="text-3xl font-semibold tracking-tight">{isAdmin ? "Access" : "Agent tokens"}</h1><p className="mt-2 text-muted-foreground">{isAdmin ? "Manage identities and API access for this RunTrace instance." : "Create project-scoped credentials for headless clients."}</p></div>{isAdmin ? <AddIdentityDialog onCreated={(created) => setIdentities((items) => [...(items ?? []), created])} /> : null}</div>
+        <div className="mb-10 flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><h1 className="text-3xl font-semibold tracking-tight">{isAdmin ? "Access" : "Agent tokens"}</h1><p className="mt-2 text-muted-foreground">{isAdmin ? "Manage identities and API access for this Mono instance." : "Create project-scoped credentials for headless clients."}</p></div>{isAdmin ? <AddIdentityDialog onCreated={(created) => setIdentities((items) => [...(items ?? []), created])} /> : null}</div>
         {isAdmin ? <>
         <div className="mb-4 flex flex-col gap-2 sm:flex-row">
           <div className="relative sm:w-80"><Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by username" aria-label="Search identities" /></div>

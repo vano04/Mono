@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Release tag to publish (for example v0.1.5)
+        description: Release tag to publish (for example v0.1.6)
         required: true
-        default: v0.1.5
+        default: v0.1.6
 
 permissions:
   contents: read
@@ -28,13 +28,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - title: RunTrace runtime
-            image: ghcr.io/vano04/runtrace
+          - title: Mono runtime
+            image: ghcr.io/vano04/mono
             context: .
             file: ./Dockerfile.api
             cache: runtime
-          - title: RunTrace web
-            image: ghcr.io/vano04/runtrace-web
+          - title: Mono web
+            image: ghcr.io/vano04/mono-web
             context: ./apps/web
             file: ./apps/web/Dockerfile
             cache: web
@@ -45,7 +45,7 @@ jobs:
           RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
         run: |
           if ! printf '%s\n' "$RELEASE_REF" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
-            echo "Expected a version tag such as v0.1.5; got: $RELEASE_REF" >&2
+            echo "Expected a version tag such as v0.1.6; got: $RELEASE_REF" >&2
             exit 1
           fi
           echo "ref=refs/tags/$RELEASE_REF" >> "$GITHUB_OUTPUT"
@@ -78,7 +78,7 @@ jobs:
             type=raw,value=latest
           labels: |
             org.opencontainers.image.title=${{ matrix.title }}
-            org.opencontainers.image.source=https://github.com/vano04/RunTrace
+            org.opencontainers.image.source=https://github.com/vano04/Mono
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
       - name: Build and publish
         id: push

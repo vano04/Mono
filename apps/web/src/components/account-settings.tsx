@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import { AccountMenu } from "@/components/account-menu"
 import { AppearanceSettings } from "@/components/appearance-settings"
 import { useAuth } from "@/components/auth-provider"
-import { RunTraceLogo } from "@/components/runtrace-logo"
+import { MonoLogo } from "@/components/mono-logo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,12 +27,12 @@ export function AccountSettings() {
   const [busy, setBusy] = useState(false)
 
   if (status.demo) return <main className="min-h-screen">
-    <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><RunTraceLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />{t("Projects")}</Button></div><AccountMenu /></header>
+    <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><MonoLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />{t("Projects")}</Button></div><AccountMenu /></header>
     <section className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-8 sm:py-16"><div className="rounded-xl border bg-card p-8 text-center shadow-sm"><h1 className="text-2xl font-semibold tracking-tight">{t("Read-only demo")}</h1><p className="mt-3 text-muted-foreground">{t("Account settings are unavailable in demo mode.")}</p></div></section>
   </main>
 
   return <main className="min-h-screen">
-    <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><RunTraceLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />{t("Projects")}</Button></div><AccountMenu /></header>
+    <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><MonoLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />{t("Projects")}</Button></div><AccountMenu /></header>
     <section className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-8 sm:py-16">
       <h1 className="text-3xl font-semibold tracking-tight">{t("Settings")}</h1>
       <p className="mt-2 text-muted-foreground">{t("Signed in as")} <strong className="font-medium text-foreground">{identity.username}</strong>.</p>
@@ -42,7 +42,7 @@ export function AccountSettings() {
         <div className="mt-5 space-y-2"><Label htmlFor="account-language">{t("Language")}</Label><Select value={locale} onValueChange={(value) => {
           if (!value || value === locale) return
           updatePreferences({ locale: value as Locale }).then(() => toast.success(t("Language updated"))).catch((error) => toast.error(error instanceof Error ? error.message : t("Could not update language")))
-        }}><SelectTrigger id="account-language" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{supportedLocales.map((value) => <SelectItem key={value} value={value}>{localeNames[value]}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">{t("Select the language used for your RunTrace account.")}</p></div>
+        }}><SelectTrigger id="account-language" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{supportedLocales.map((value) => <SelectItem key={value} value={value}>{localeNames[value]}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">{t("Select the language used for your Mono account.")}</p></div>
       </div>
       <div className="mt-8 rounded-xl border bg-card p-6 shadow-sm">
         <h2 className="text-xl font-semibold">{passwordSet ? t("Change password") : t("Set a password")}</h2>
