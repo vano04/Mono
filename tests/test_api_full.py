@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 
-from runtrace_api.database import SessionLocal
-from runtrace_api.models import AuditEvent
+from mono_api.database import SessionLocal
+from mono_api.models import AuditEvent
 
 
 def test_project_creation_initializes_context_and_lists_project(fresh_database):

@@ -1,6 +1,6 @@
 # Instance authentication
 
-RunTrace normal mode uses instance-scoped identities with a username,
+Mono normal mode uses instance-scoped identities with a username,
 password, role, and status. It does not require an email address or external
 identity provider.
 
@@ -9,14 +9,14 @@ identity provider.
 When the identities table is empty, data API requests return `428` and the web
 app shows owner onboarding. The first completed setup atomically creates the
 sole owner, stores a salted scrypt password hash, and starts an opaque
-server-side session. RunTrace never stores plaintext passwords.
+server-side session. Mono never stores plaintext passwords.
 
 Passwords must contain at least 12 characters. Use a password manager to
 generate and store a unique password.
 
 When upgrading an instance that already has a passkey-era owner, an existing
 browser session can set a password from the account menu. If no session remains,
-or the owner password is lost, set `RUNTRACE_OWNER_RECOVERY_PASSWORD` to a
+or the owner password is lost, set `MONO_OWNER_RECOVERY_PASSWORD` to a
 temporary password of at least 12 characters for one startup, sign in, and then
 remove the variable. Applying a recovery password revokes the owner's browser
 sessions.
@@ -42,19 +42,19 @@ its SHA-256 digest is persisted. The browser receives an `HttpOnly`,
 For a trusted LAN deployment over plain HTTP, use:
 
 ```env
-RUNTRACE_SECURE_SESSION_COOKIE=false
+MONO_SECURE_SESSION_COOKIE=false
 ```
 
 Plain HTTP does not protect passwords or session cookies from interception by
 other devices on the network. Use HTTPS for untrusted networks and set:
 
 ```env
-RUNTRACE_SECURE_SESSION_COOKIE=true
+MONO_SECURE_SESSION_COOKIE=true
 ```
 
 Normal mode authenticates browser requests with the session cookie and
 headless clients with bearer tokens. Any signed-in identity can create tokens
-under **Access → Your agent tokens**. A token is displayed only once; RunTrace
+under **Access → Your agent tokens**. A token is displayed only once; Mono
 stores its SHA-256 digest, visible prefix, name, timestamps, and optional
 expiry. Revocation is immediate. Creating tokens and administering instance
 identities require a browser session; bearer tokens cannot mint replacement or
@@ -62,16 +62,16 @@ broader credentials, list credentials, or revoke them.
 
 ## Development mode
 
-`RUNTRACE_DEV=true` is intentionally unauthenticated. It synthesizes owner
+`MONO_DEV=true` is intentionally unauthenticated. It synthesizes owner
 access for every request. Do not expose this mode outside a trusted development
 machine.
 
-CLI, SDK, and MCP clients use the known development key `rt_runtrace_dev` for
+CLI, SDK, and MCP clients use the known development key `rt_mono_dev` for
 the default `http://localhost:8000` connection. The key is not a security
 boundary—development mode still permits requests without it—but it gives local
 clients the same deterministic bearer-token setup as normal mode. Save the
 connection for both the CLI and installed agent plugins with:
 
 ```bash
-runtrace auth rt_runtrace_dev --base-url http://localhost:8000
+mono auth rt_mono_dev --base-url http://localhost:8000
 ```

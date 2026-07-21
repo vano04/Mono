@@ -255,7 +255,7 @@ def test_importer_propagates_resolved_authentication_to_mcp_child(monkeypatch, t
     )
     asyncio.run(sync.run(args))
 
-    assert captured["server"]["env"]["RUNTRACE_BASE_URL"] == "https://trace.example"
-    assert captured["server"]["env"]["RUNTRACE_API_TOKEN"] == "rt_synthetic"
+    assert captured["server"]["env"]["MONO_BASE_URL"] == "https://trace.example"
+    assert captured["server"]["env"]["MONO_API_TOKEN"] == "rt_synthetic"
     assert captured["initialized"] is True
     assert captured["sync"] == ("demo-project", 3)

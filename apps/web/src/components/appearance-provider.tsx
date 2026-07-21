@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { ThemeProvider } from "next-themes"
 
-const STORAGE_KEY = "runtrace:appearance:v1"
+const STORAGE_KEY = "mono:appearance:v1"
 const DEFAULT_ACCENT = "#4f46e5"
 
 type AppearancePreferences = {
@@ -68,12 +68,12 @@ function AppearanceState({ children }: { children: React.ReactNode }) {
     root.style.setProperty("--sidebar-primary", preferences.accent)
     root.dataset.density = preferences.compactRows ? "compact" : "comfortable"
 
-    let favicon = document.querySelector<HTMLLinkElement>('link[data-runtrace-icon]')
+    let favicon = document.querySelector<HTMLLinkElement>('link[data-mono-icon]')
     if (!favicon) {
       favicon = document.createElement("link")
       favicon.rel = "icon"
       favicon.type = "image/svg+xml"
-      favicon.dataset.runtraceIcon = ""
+      favicon.dataset.monoIcon = ""
       document.head.appendChild(favicon)
     }
     favicon.href = faviconFor(preferences.accent)

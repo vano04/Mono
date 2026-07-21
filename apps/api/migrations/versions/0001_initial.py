@@ -1,4 +1,4 @@
-"""Initial RunTrace persistence schema.
+"""Initial Mono persistence schema.
 
 Revision ID: 0001_initial
 Revises:
@@ -6,8 +6,8 @@ Revises:
 
 from alembic import op
 
-from runtrace_api.database import Base
-from runtrace_api import models  # noqa: F401
+from mono_api.database import Base
+from mono_api import models  # noqa: F401
 
 
 revision = "0001_initial"

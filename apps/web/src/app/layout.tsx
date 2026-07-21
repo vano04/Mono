@@ -7,7 +7,7 @@ import { I18nProvider } from "@/components/i18n-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "RunTrace", template: "%s · RunTrace" },
+  title: { default: "Mono", template: "%s · Mono" },
   description: "Persistent experiment memory for autonomous research agents.",
 };
 

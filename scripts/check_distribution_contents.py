@@ -7,12 +7,12 @@ from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 
-FORBIDDEN_PATH_PARTS = {"RunTraceDemo", "artifacts"}
+FORBIDDEN_PATH_PARTS = {"MonoDemo", "artifacts"}
 FORBIDDEN_FILENAMES = {"design-qa.md", "verification-report.md"}
 CONTENT_MARKERS = (
     b"/" + b"Users" + b"/",
     b"/private" + b"/tmp/",
-    b"RunTrace" + b"-QA-",
+    b"Mono" + b"-QA-",
 )
 
 

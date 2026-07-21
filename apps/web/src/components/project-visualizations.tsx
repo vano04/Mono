@@ -15,14 +15,14 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import type { RTVisSpec, Visualization, VisualizationDocument } from "@/lib/types"
 
 const NEW_WIDGET: RTVisSpec = {
-  $schema: "https://runtrace.dev/schemas/rtvis/v1.json",
+  $schema: "https://mono.dev/schemas/rtvis/v1.json",
   version: 1,
   title: "Custom widget",
-  description: "A portable interactive RunTrace widget",
+  description: "A portable interactive Mono widget",
   datasets: { data: { source: "inline", rows: [] } },
   view: {
     type: "javascript",
@@ -30,7 +30,7 @@ const NEW_WIDGET: RTVisSpec = {
     height: 320,
     markup: '<div class="card"><span class="badge">Interactive</span><h2>Custom widget</h2><p id="summary" class="muted"></p><button id="action" class="btn btn-primary">Update</button></div>',
     styles: "h2 { margin: 12px 0 4px; font-size: 20px; } #summary { margin: 0 0 16px; }",
-    script: "const rows = window.runtrace.datasets.data || [];\nconst summary = document.getElementById('summary');\nsummary.textContent = `${rows.length} data rows available`;\ndocument.getElementById('action').addEventListener('click', () => { summary.textContent = 'Widget interaction works'; });",
+    script: "const rows = window.mono.datasets.data || [];\nconst summary = document.getElementById('summary');\nsummary.textContent = `${rows.length} data rows available`;\ndocument.getElementById('action').addEventListener('click', () => { summary.textContent = 'Widget interaction works'; });",
   },
 }
 
@@ -52,7 +52,7 @@ function SpecEditor({ slug, visualization, open, onOpenChange, onSaved }: { slug
     setPending(true)
     try {
       const spec = JSON.parse(value) as RTVisSpec
-      await runtrace.updateVisualization(slug, visualization.id, { spec })
+      await mono.updateVisualization(slug, visualization.id, { spec })
       toast.success("Visualization updated")
       onOpenChange(false)
       onSaved()
@@ -63,7 +63,7 @@ function SpecEditor({ slug, visualization, open, onOpenChange, onSaved }: { slug
 
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-3xl">
-      <DialogHeader><DialogTitle>Edit {visualization.name}</DialogTitle><DialogDescription>Edit the portable RTVis JSON. JavaScript widgets run in an isolated, network-disabled frame and receive RunTrace theme tokens.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>Edit {visualization.name}</DialogTitle><DialogDescription>Edit the portable RTVis JSON. JavaScript widgets run in an isolated, network-disabled frame and receive Mono theme tokens.</DialogDescription></DialogHeader>
       <FieldGroup><Field><FieldLabel htmlFor="visualization-spec">RTVis JSON</FieldLabel><Textarea id="visualization-spec" className="min-h-64 font-mono text-xs sm:min-h-96" value={value} onChange={(event) => setValue(event.target.value)} spellCheck={false} /><FieldDescription>Revision {visualization.revision} · schema version {visualization.spec_version}</FieldDescription></Field></FieldGroup>
       <DialogFooter showCloseButton><Button type="button" onClick={save} disabled={pending}>{pending ? "Saving…" : "Save visualization"}</Button></DialogFooter>
     </DialogContent>
@@ -80,7 +80,7 @@ function NewVisualizationDialog({ slug, onCreated }: { slug: string; onCreated: 
   async function create() {
     setPending(true)
     try {
-      await runtrace.createVisualization(slug, { name: name.trim(), description: description.trim(), spec: JSON.parse(value) as RTVisSpec })
+      await mono.createVisualization(slug, { name: name.trim(), description: description.trim(), spec: JSON.parse(value) as RTVisSpec })
       toast.success("Visualization created")
       setOpen(false)
       setName("Custom widget"); setDescription(""); setValue(JSON.stringify(NEW_WIDGET, null, 2))
@@ -94,7 +94,7 @@ function NewVisualizationDialog({ slug, onCreated }: { slug: string; onCreated: 
     <DialogTrigger render={<Button type="button" size="sm" />}><Plus data-icon="inline-start" />New</DialogTrigger>
     <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-3xl">
       <DialogHeader><DialogTitle>New visualization</DialogTitle><DialogDescription>Start with a portable JavaScript widget or replace the template with ShadCN-backed RTVis nodes.</DialogDescription></DialogHeader>
-      <FieldGroup><Field><FieldLabel htmlFor="visualization-name">Name</FieldLabel><Input id="visualization-name" value={name} onChange={(event) => setName(event.target.value)} /></Field><Field><FieldLabel htmlFor="visualization-description">Description</FieldLabel><Input id="visualization-description" value={description} onChange={(event) => setDescription(event.target.value)} /></Field><Field><FieldLabel htmlFor="new-visualization-spec">RTVis JSON</FieldLabel><Textarea id="new-visualization-spec" className="min-h-72 font-mono text-xs sm:min-h-96" value={value} onChange={(event) => setValue(event.target.value)} spellCheck={false} /><FieldDescription>The template can use <code>window.runtrace.datasets</code>, <code>window.runtrace.theme</code>, and the included ShadCN-like utility classes.</FieldDescription></Field></FieldGroup>
+      <FieldGroup><Field><FieldLabel htmlFor="visualization-name">Name</FieldLabel><Input id="visualization-name" value={name} onChange={(event) => setName(event.target.value)} /></Field><Field><FieldLabel htmlFor="visualization-description">Description</FieldLabel><Input id="visualization-description" value={description} onChange={(event) => setDescription(event.target.value)} /></Field><Field><FieldLabel htmlFor="new-visualization-spec">RTVis JSON</FieldLabel><Textarea id="new-visualization-spec" className="min-h-72 font-mono text-xs sm:min-h-96" value={value} onChange={(event) => setValue(event.target.value)} spellCheck={false} /><FieldDescription>The template can use <code>window.mono.datasets</code>, <code>window.mono.theme</code>, and the included ShadCN-like utility classes.</FieldDescription></Field></FieldGroup>
       <DialogFooter showCloseButton><Button type="button" onClick={create} disabled={pending || !name.trim()}>{pending ? "Creating…" : "Create visualization"}</Button></DialogFooter>
     </DialogContent>
   </Dialog>
@@ -107,7 +107,7 @@ function ImportDialog({ slug, onImported }: { slug: string; onImported: () => vo
   async function importDocument() {
     setPending(true)
     try {
-      await runtrace.importVisualization(slug, JSON.parse(value) as VisualizationDocument)
+      await mono.importVisualization(slug, JSON.parse(value) as VisualizationDocument)
       toast.success("Visualization imported"); setValue(""); setOpen(false); onImported()
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not import visualization") }
     finally { setPending(false) }
@@ -115,8 +115,8 @@ function ImportDialog({ slug, onImported }: { slug: string; onImported: () => vo
   return <Dialog open={open} onOpenChange={setOpen}>
     <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}><Upload data-icon="inline-start" />Import</DialogTrigger>
     <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
-      <DialogHeader><DialogTitle>Import visualization</DialogTitle><DialogDescription>Paste a complete versioned RunTrace visualization export.</DialogDescription></DialogHeader>
-      <Field><FieldLabel htmlFor="visualization-import">Export document</FieldLabel><Textarea id="visualization-import" className="min-h-80 font-mono text-xs" value={value} onChange={(event) => setValue(event.target.value)} placeholder='{"format":"runtrace-visualization","version":1,…}' spellCheck={false} /></Field>
+      <DialogHeader><DialogTitle>Import visualization</DialogTitle><DialogDescription>Paste a complete versioned Mono visualization export.</DialogDescription></DialogHeader>
+      <Field><FieldLabel htmlFor="visualization-import">Export document</FieldLabel><Textarea id="visualization-import" className="min-h-80 font-mono text-xs" value={value} onChange={(event) => setValue(event.target.value)} placeholder='{"format":"mono-visualization","version":1,…}' spellCheck={false} /></Field>
       <DialogFooter showCloseButton><Button type="button" onClick={importDocument} disabled={pending || !value.trim()}>{pending ? "Importing…" : "Import"}</Button></DialogFooter>
     </DialogContent>
   </Dialog>
@@ -133,16 +133,16 @@ export function VisualizationSettings({ slug, visualizations, reload }: { slug: 
   const [deleteTarget, setDeleteTarget] = useState<Visualization | null>(null)
 
   async function toggle(item: Visualization) {
-    try { await runtrace.updateVisualization(slug, item.id, { visible: !item.visible }); toast.success(item.visible ? "Visualization hidden" : "Visualization shown"); reload() }
+    try { await mono.updateVisualization(slug, item.id, { visible: !item.visible }); toast.success(item.visible ? "Visualization hidden" : "Visualization shown"); reload() }
     catch (error) { toast.error(error instanceof Error ? error.message : "Could not update visualization") }
   }
   async function exportItem(item: Visualization) {
-    try { downloadDocument(await runtrace.exportVisualization(slug, item.id)) }
+    try { downloadDocument(await mono.exportVisualization(slug, item.id)) }
     catch (error) { toast.error(error instanceof Error ? error.message : "Could not export visualization") }
   }
   async function remove() {
     if (!deleteTarget) return
-    try { await runtrace.deleteVisualization(slug, deleteTarget.id); toast.success("Visualization deleted"); setDeleteTarget(null); reload() }
+    try { await mono.deleteVisualization(slug, deleteTarget.id); toast.success("Visualization deleted"); setDeleteTarget(null); reload() }
     catch (error) { toast.error(error instanceof Error ? error.message : "Could not delete visualization") }
   }
 

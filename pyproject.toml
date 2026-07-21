@@ -1,6 +1,6 @@
 [project]
-name = "runtrace-ai"
-version = "0.1.5"
+name = "mono-ai"
+version = "0.1.6"
 description = "Persistent experiment memory for autonomous research agents"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -42,14 +42,14 @@ dev = [
 ]
 
 [project.scripts]
-runtrace = "runtrace.cli:app"
-runtrace-mcp = "runtrace_mcp.server:main"
+mono = "mono.cli:app"
+mono-mcp = "mono_mcp.server:main"
 
 [project.urls]
-Homepage = "https://github.com/vano04/RunTrace"
-Documentation = "https://github.com/vano04/RunTrace#readme"
-Issues = "https://github.com/vano04/RunTrace/issues"
-Repository = "https://github.com/vano04/RunTrace.git"
+Homepage = "https://github.com/vano04/Mono"
+Documentation = "https://github.com/vano04/Mono#readme"
+Issues = "https://github.com/vano04/Mono/issues"
+Repository = "https://github.com/vano04/Mono.git"
 
 [build-system]
 requires = ["hatchling"]
@@ -57,9 +57,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = [
-  "apps/api/runtrace_api",
-  "apps/mcp/runtrace_mcp",
-  "packages/python_sdk/runtrace",
+  "apps/api/mono_api",
+  "apps/mcp/mono_mcp",
+  "packages/python_sdk/mono",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -68,7 +68,7 @@ exclude = [
   "/.claude-plugin",
   "/.github",
   "/.codex",
-  "/RunTraceDemo",
+  "/MonoDemo",
   "/artifacts",
   "/design-qa.md",
   "/docs/verification-report.md",

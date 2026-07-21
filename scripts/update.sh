@@ -30,11 +30,11 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Updating RunTrace source..."
+echo "Updating Mono source..."
 git pull --ff-only
 
-echo "Rebuilding and restarting RunTrace..."
+echo "Rebuilding and restarting Mono..."
 compose up -d --build --remove-orphans
 
-echo "RunTrace update complete."
+echo "Mono update complete."
 compose ps

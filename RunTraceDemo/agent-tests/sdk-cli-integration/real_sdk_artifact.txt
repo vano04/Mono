@@ -1,2 +1,0 @@
-Synthetic RunTrace SDK artifact.
-No credentials or production data.

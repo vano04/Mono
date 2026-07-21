@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mono Visualizations"
+  short_description: "Build dashboard and run-result visuals"
+  default_prompt: "Use $mono-visualizations to build the appropriate Mono visualization for this data."

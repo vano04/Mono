@@ -37,7 +37,7 @@ def main() -> None:
     require_version("pyproject.toml", project_version, expected)
 
     lock_packages = read_toml("uv.lock")["package"]
-    locked_project = next(package for package in lock_packages if package["name"] == "runtrace-ai")
+    locked_project = next(package for package in lock_packages if package["name"] == "mono-ai")
     require_version("uv.lock", locked_project["version"], expected)
 
     web_package = read_json("apps/web/package.json")
@@ -46,26 +46,26 @@ def main() -> None:
     require_version("apps/web/package-lock.json", web_lock["version"], expected)
     require_version("apps/web/package-lock.json root package", web_lock["packages"][""]["version"], expected)
 
-    api_source = (ROOT / "apps/api/runtrace_api/main.py").read_text()
+    api_source = (ROOT / "apps/api/mono_api/main.py").read_text()
     api_match = re.search(r"app = FastAPI\([\s\S]*?version=\"([^\"]+)\"", api_source)
     if api_match is None:
         raise SystemExit("Could not find the FastAPI application version")
     require_version("FastAPI metadata", api_match.group(1), expected)
 
-    claude_plugin = read_json("plugins/runtrace/.claude-plugin/plugin.json")
-    codex_plugin = read_json("plugins/runtrace/.codex-plugin/plugin.json")
-    mcp_config = read_json("plugins/runtrace/.mcp.json")
+    claude_plugin = read_json("plugins/mono/.claude-plugin/plugin.json")
+    codex_plugin = read_json("plugins/mono/.codex-plugin/plugin.json")
+    mcp_config = read_json("plugins/mono/.mcp.json")
     require_version("Claude plugin", claude_plugin["version"], expected)
     require_version("Codex plugin", codex_plugin["version"], expected)
 
-    package_spec = f"runtrace-ai[mcp]=={expected}"
-    claude_args = claude_plugin["mcpServers"]["runtrace"]["args"]
-    codex_args = mcp_config["mcpServers"]["runtrace"]["args"]
+    package_spec = f"mono-ai[mcp]=={expected}"
+    claude_args = claude_plugin["mcpServers"]["mono"]["args"]
+    codex_args = mcp_config["mcpServers"]["mono"]["args"]
     if package_spec not in claude_args or package_spec not in codex_args:
         raise SystemExit(f"Plugin MCP launchers must use {package_spec!r}")
 
     compose = (ROOT / "docker-compose.ghcr.yml").read_text()
-    compose_default = f"${{RUNTRACE_VERSION:-{expected}}}"
+    compose_default = f"${{MONO_VERSION:-{expected}}}"
     if compose.count(compose_default) != 3:
         raise SystemExit(f"docker-compose.ghcr.yml must contain three defaults for {compose_default}")
 

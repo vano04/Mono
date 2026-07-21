@@ -10,14 +10,14 @@ import { AccountMenu } from "@/components/account-menu"
 import { useAuth } from "@/components/auth-provider"
 import { useAppearance } from "@/components/appearance-provider"
 import { CreateProjectDialog } from "@/components/create-project-dialog"
-import { RunTraceLogo } from "@/components/runtrace-logo"
+import { MonoLogo } from "@/components/mono-logo"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import type { Project } from "@/lib/types"
 import { useAutoRefresh } from "@/lib/use-auto-refresh"
 import { cn } from "@/lib/utils"
@@ -32,12 +32,12 @@ export function ProjectsScreen() {
 
   const load = useCallback(async () => {
     try {
-      setProjects(await runtrace.projects())
+      setProjects(await mono.projects())
     } catch {}
   }, [])
 
   useEffect(() => {
-    runtrace.projects().then(setProjects).catch((error) => {
+    mono.projects().then(setProjects).catch((error) => {
       toast.error(error instanceof Error ? error.message : t("Could not load projects"))
       setProjects([])
     })
@@ -54,7 +54,7 @@ export function ProjectsScreen() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 sm:px-8">
       <header className="flex h-16 items-center justify-between border-b">
-        <RunTraceLogo />
+        <MonoLogo />
         <div className="flex items-center gap-1">
           <Button variant="ghost" render={<Link href="/docs" />} nativeButton={false}><BookOpen data-icon="inline-start" />{t("Docs")}</Button>
           {!status.demo ? <AppSettingsLink /> : null}

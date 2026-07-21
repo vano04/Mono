@@ -4,7 +4,7 @@ from importlib.metadata import version as package_version
 
 from typer.testing import CliRunner
 
-from runtrace import cli
+from mono import cli
 
 
 runner = CliRunner()
@@ -43,7 +43,7 @@ def test_cli_version():
     result = runner.invoke(cli.app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.stdout.strip() == f"runtrace {package_version('runtrace-ai')}"
+    assert result.stdout.strip() == f"mono {package_version('mono-ai')}"
 
 
 def test_cli_search_and_context_commands(monkeypatch):
@@ -68,7 +68,7 @@ def test_cli_auth_validates_and_saves_credentials(monkeypatch, tmp_path):
             saved["request"] = (method, path)
             return {"authenticated": True}
 
-    monkeypatch.setattr(cli, "RunTrace", AuthClient)
+    monkeypatch.setattr(cli, "Mono", AuthClient)
     monkeypatch.setattr(cli, "save_credentials", lambda base_url, api_key: saved.update(
         base_url=base_url, api_key=api_key
     ) or tmp_path / "credentials.json")
@@ -89,7 +89,7 @@ def test_cli_auth_rejects_invalid_key_without_saving(monkeypatch):
         def __init__(self, **_kwargs): pass
         def request(self, _method, _path): return {"authenticated": False}
 
-    monkeypatch.setattr(cli, "RunTrace", AuthClient)
+    monkeypatch.setattr(cli, "Mono", AuthClient)
     monkeypatch.setattr(cli, "save_credentials", lambda *_args: (_ for _ in ()).throw(
         AssertionError("invalid credentials must not be saved")
     ))
@@ -104,7 +104,7 @@ def test_cli_exec_parses_metric_and_event_output(monkeypatch):
     monkeypatch.setattr(cli, "client", lambda _base_url, _api_token: fake)
 
     class Process:
-        stdout = iter(["RUNTRACE_METRIC loss=3.2 step=10\n", 'RUNTRACE_EVENT level=warning message="Guardrail near"\n'])
+        stdout = iter(["MONO_METRIC loss=3.2 step=10\n", 'MONO_EVENT level=warning message="Guardrail near"\n'])
         def wait(self): return 0
 
     monkeypatch.setattr(cli.subprocess, "Popen", lambda *_args, **_kwargs: Process())
@@ -140,5 +140,5 @@ def test_cli_integration_installer_supports_codex_and_claude(monkeypatch):
     assert codex.exit_code == 0
     assert claude.exit_code == 0
     assert calls[0][0][:4] == ["codex", "plugin", "marketplace", "add"]
-    assert calls[1][0] == ["codex", "plugin", "add", "runtrace@runtrace"]
-    assert calls[3][0][:4] == ["claude", "plugin", "install", "runtrace@runtrace"]
+    assert calls[1][0] == ["codex", "plugin", "add", "mono@mono"]
+    assert calls[3][0][:4] == ["claude", "plugin", "install", "mono@mono"]

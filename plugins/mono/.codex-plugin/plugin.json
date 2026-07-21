@@ -1,0 +1,30 @@
+{
+  "name": "mono",
+  "version": "0.1.6",
+  "description": "Persistent experiment memory and run tracking for autonomous research agents.",
+  "author": {
+    "name": "Mono contributors"
+  },
+  "homepage": "https://github.com/vano04/Mono",
+  "repository": "https://github.com/vano04/Mono",
+  "keywords": ["experiments", "research", "agents", "mcp", "observability", "visualization"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Mono",
+    "shortDescription": "Shared experiment memory for research agents",
+    "longDescription": "Connect Codex to a self-hosted Mono instance. Retrieve prior evidence, coordinate experiments, record outcomes, and generate safe project-scoped RTVis visualizations through the bundled MCP tools.",
+    "developerName": "Mono contributors",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/vano04/Mono",
+    "privacyPolicyURL": "https://github.com/vano04/Mono/blob/master/docs/privacy.md",
+    "termsOfServiceURL": "https://github.com/vano04/Mono/blob/master/docs/plugin-terms.md",
+    "defaultPrompt": [
+      "Set up this repository for reliable Mono experiment tracking",
+      "Review prior evidence, run one experiment, and record its outcome in Mono",
+      "Generate a visualization for this data in Mono"
+    ],
+    "brandColor": "#22C55E"
+  }
+}

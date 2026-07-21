@@ -3,8 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from runtrace_api.database import SessionLocal
-from runtrace_api.models import Experiment
+from mono_api.database import SessionLocal
+from mono_api.models import Experiment
 
 
 def test_project_context_is_scoped_and_complete(fresh_database):
@@ -151,7 +151,7 @@ def test_project_slug_lookup_is_case_insensitive(fresh_database):
 
 
 def test_run_inherits_custom_result_mode_from_claimed_experiment(fresh_database):
-    spec = {"version": 1, "title": "Methods", "datasets": {"metrics": {"source": "runtrace", "query": "run_metrics"}}, "view": {"type": "chart", "chart": "bar", "dataset": "metrics", "x": "name", "y": "value"}}
+    spec = {"version": 1, "title": "Methods", "datasets": {"metrics": {"source": "mono", "query": "run_metrics"}}, "view": {"type": "chart", "chart": "bar", "dataset": "metrics", "x": "name", "y": "value"}}
     registered = fresh_database.post("/api/v1/projects/dense-optimizer/result-visualizations", json={"key": "called-methods", "name": "Called methods", "spec": spec})
     assert registered.status_code == 201, registered.text
     updated = fresh_database.patch(

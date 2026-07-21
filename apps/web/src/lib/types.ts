@@ -124,14 +124,14 @@ export interface RTVisNode {
 }
 
 export interface RTVisDataset {
-  source: "inline" | "runtrace"
+  source: "inline" | "mono"
   rows?: Array<Record<string, unknown>>
   query?: "runs" | "experiments" | null
   filters?: Record<string, unknown>
 }
 
 export interface RTVisSpec {
-  $schema: "https://runtrace.dev/schemas/rtvis/v1.json"
+  $schema: "https://mono.dev/schemas/rtvis/v1.json"
   version: 1
   title: string
   description: string
@@ -176,7 +176,7 @@ export interface ExperimentResultVisualization {
 }
 
 export interface VisualizationDocument {
-  format: "runtrace-visualization"
+  format: "mono-visualization"
   version: 1
   visualization: { name: string; description: string; spec: RTVisSpec }
 }

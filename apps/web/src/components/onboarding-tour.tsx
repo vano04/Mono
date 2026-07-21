@@ -11,7 +11,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import { auth } from "@/lib/auth"
 import type { Project } from "@/lib/types"
 
@@ -58,7 +58,7 @@ export function OnboardingTour({ onComplete }: { onComplete: () => Promise<void>
     event.preventDefault()
     setPending(true)
     try {
-      const created = await runtrace.createProject({
+      const created = await mono.createProject({
         name: name.trim(),
         slug: slug.trim(),
         description: goal.trim(),
@@ -79,7 +79,7 @@ export function OnboardingTour({ onComplete }: { onComplete: () => Promise<void>
     if (!project) return
     setPending(true)
     try {
-      await runtrace.updateProgram(project.slug, program.trim())
+      await mono.updateProgram(project.slug, program.trim())
       setStep("measurement")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save program.md")
@@ -95,8 +95,8 @@ export function OnboardingTour({ onComplete }: { onComplete: () => Promise<void>
     try {
       const rules = exclusions.split("\n").map((rule) => rule.trim()).filter(Boolean)
       await Promise.all([
-        runtrace.updateSettings(project.slug, metric.trim(), direction),
-        runtrace.updateExclusions(project.slug, rules),
+        mono.updateSettings(project.slug, metric.trim(), direction),
+        mono.updateExclusions(project.slug, rules),
       ])
       setStep("ready")
     } catch (error) {
@@ -120,7 +120,7 @@ export function OnboardingTour({ onComplete }: { onComplete: () => Promise<void>
   }
 
   const numberedStep = stepNumber[step]
-  const bootstrap = project ? `runtrace.get_project_context({ project: "${project.slug}" })` : ""
+  const bootstrap = project ? `mono.get_project_context({ project: "${project.slug}" })` : ""
 
   return (
     <Dialog open onOpenChange={() => undefined}>

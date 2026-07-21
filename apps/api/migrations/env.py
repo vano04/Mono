@@ -3,9 +3,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from runtrace_api.config import settings
-from runtrace_api.database import Base
-from runtrace_api import models  # noqa: F401
+from mono_api.config import settings
+from mono_api.database import Base
+from mono_api import models  # noqa: F401
 
 
 config = context.config

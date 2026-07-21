@@ -8,7 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { EditExperimentDialog } from "@/components/edit-experiment-dialog"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import { useI18n } from "@/components/i18n-provider"
 
 export function RecordActions({ slug, id, type, canEdit, archived = false, canBaseline = false, onChanged }: {
@@ -19,15 +19,15 @@ export function RecordActions({ slug, id, type, canEdit, archived = false, canBa
   const [editOpen, setEditOpen] = useState(false)
   async function perform(action: "archive" | "restore" | "baseline" | "delete") {
     try {
-      if (action === "baseline") await runtrace.setBaseline(slug, id)
+      if (action === "baseline") await mono.setBaseline(slug, id)
       else if (type === "experiment") {
-        if (action === "archive") await runtrace.archiveExperiment(slug, id)
-        if (action === "restore") await runtrace.restoreExperiment(slug, id)
-        if (action === "delete") await runtrace.deleteExperiment(slug, id)
+        if (action === "archive") await mono.archiveExperiment(slug, id)
+        if (action === "restore") await mono.restoreExperiment(slug, id)
+        if (action === "delete") await mono.deleteExperiment(slug, id)
       } else {
-        if (action === "archive") await runtrace.archiveRun(id)
-        if (action === "restore") await runtrace.restoreRun(id)
-        if (action === "delete") await runtrace.deleteRun(id)
+        if (action === "archive") await mono.archiveRun(id)
+        if (action === "restore") await mono.restoreRun(id)
+        if (action === "delete") await mono.deleteRun(id)
       }
       toast.success(action === "baseline" ? t("Baseline updated") : `Record ${action}d`)
       onChanged()

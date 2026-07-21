@@ -14,9 +14,9 @@ cd "$repo_root"
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   compose down -v
-  export RUNTRACE_DEV=true
+  export MONO_DEV=true
   compose up -d --build
 else
-  rm -f "$repo_root/data/runtrace.db"
-  echo "Removed native data/runtrace.db. Restart the API with RUNTRACE_SEED_DEMO=true to reseed the demo."
+  rm -f "$repo_root/data/mono.db"
+  echo "Removed native data/mono.db. Restart the API with MONO_SEED_DEMO=true to reseed the demo."
 fi

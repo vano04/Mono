@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from runtrace.credentials import resolve_connection
+from mono.credentials import resolve_connection
 
 
 TRANSPORTS = ("http", "python", "mcp")
@@ -141,9 +141,9 @@ def sync_http(client: httpx.Client, project: str, row: dict[str, Any]) -> str:
 
 
 def sync_python(base_url: str, api_token: str | None, project: str, row: dict[str, Any]) -> str:
-    from runtrace import RunTrace
+    from mono import Mono
 
-    client = RunTrace(base_url=base_url, api_token=api_token, strict=True, timeout=30)
+    client = Mono(base_url=base_url, api_token=api_token, strict=True, timeout=30)
     payload = create_payload(row, "python")
     try:
         with client.run(
@@ -237,12 +237,12 @@ async def run(args: argparse.Namespace) -> None:
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
 
-        server_env = {**os.environ, "RUNTRACE_BASE_URL": base_url}
+        server_env = {**os.environ, "MONO_BASE_URL": base_url}
         if api_token:
-            server_env["RUNTRACE_API_TOKEN"] = api_token
+            server_env["MONO_API_TOKEN"] = api_token
         server = StdioServerParameters(
             command=sys.executable,
-            args=["-m", "runtrace_mcp.server"],
+            args=["-m", "mono_mcp.server"],
             env=server_env,
         )
         async with stdio_client(server) as (read, write):

@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { runtrace } from "@/lib/api"
+import { mono } from "@/lib/api"
 import { projectCapabilities } from "@/lib/project-access"
 import type { Dashboard, ProgressData, Run, SearchResult } from "@/lib/types"
 import { useAutoRefresh } from "@/lib/use-auto-refresh"
@@ -68,7 +68,7 @@ function DashboardView({ data, progress, slug, canEdit, reload, setProgress, ope
   async function changeProgress(nextMetric: string, nextWindow: string, nextInclude = includeTags, nextExclude = excludeTags) {
     setMetric(nextMetric); setWindow(nextWindow)
     onProgressQueryChange({ metric: nextMetric, window: nextWindow, includeTags: nextInclude, excludeTags: nextExclude })
-    try { setProgress(await runtrace.progress(slug, nextMetric, nextWindow, nextInclude, nextExclude)) }
+    try { setProgress(await mono.progress(slug, nextMetric, nextWindow, nextInclude, nextExclude)) }
     catch (error) { toast.error(error instanceof Error ? error.message : "Could not load progress") }
   }
 
@@ -140,14 +140,14 @@ function SearchView({ data, slug, canEdit, reload, openRecord }: { data: Dashboa
   const [order, setOrder] = useState<SearchOrder>("newest")
   useEffect(() => {
     let active = true
-    runtrace.search(slug, "").then((response) => {
+    mono.search(slug, "").then((response) => {
       if (active) { setResults(response.results); setSearched(true) }
     }).catch((error) => {
       if (active) toast.error(error instanceof Error ? error.message : "Could not load experiment evidence")
     }).finally(() => { if (active) setPending(false) })
     return () => { active = false }
   }, [slug])
-  async function runSearch(nextInclude = includeTags, nextExclude = excludeTags) { setPending(true); try { const response = await runtrace.search(slug, query, false, nextInclude, nextExclude); setResults(response.results); setSearched(true) } catch (error) { toast.error(error instanceof Error ? error.message : "Search failed") } finally { setPending(false) } }
+  async function runSearch(nextInclude = includeTags, nextExclude = excludeTags) { setPending(true); try { const response = await mono.search(slug, query, false, nextInclude, nextExclude); setResults(response.results); setSearched(true) } catch (error) { toast.error(error instanceof Error ? error.message : "Search failed") } finally { setPending(false) } }
   async function submit(event: FormEvent) { event.preventDefault(); await runSearch() }
   function filtersChanged(nextInclude: string[], nextExclude: string[]) { setIncludeTags(nextInclude); setExcludeTags(nextExclude); if (searched) runSearch(nextInclude, nextExclude) }
   function recordChanged() { reload(); runSearch() }
@@ -200,12 +200,12 @@ function SettingsView({ data, slug, canManage, reload }: { data: Dashboard; slug
   const [newTag, setNewTag] = useState("")
   const [tagPending, setTagPending] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  async function save(event: FormEvent) { event.preventDefault(); setPending(true); try { await Promise.all([runtrace.updateProject(slug, description, repositoryUrl), runtrace.updateProgram(slug, program), runtrace.updateExclusions(slug, exclusions.split("\n")), runtrace.updateSettings(slug, metric, direction)]); toast.success("Project settings saved"); reload() } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save settings") } finally { setPending(false) } }
-  async function addTag() { const name = newTag.trim(); if (!name) return; setTagPending("new"); try { await runtrace.createTag(slug, name); setNewTag(""); toast.success("Filter created"); reload() } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create filter") } finally { setTagPending(null) } }
-  async function renameTag(id: string) { const name = tagNames[id]?.trim(); if (!name) return; setTagPending(id); try { await runtrace.updateTag(slug, id, name); toast.success("Filter updated"); reload() } catch (error) { toast.error(error instanceof Error ? error.message : "Could not update filter") } finally { setTagPending(null) } }
-  async function removeTag(id: string, name: string) { if (!window.confirm(`Delete “${name}”? It will also be removed from existing runs and experiments.`)) return; setTagPending(id); try { await runtrace.deleteTag(slug, id); toast.success("Filter deleted"); reload() } catch (error) { toast.error(error instanceof Error ? error.message : "Could not delete filter") } finally { setTagPending(null) } }
-  async function deleteProject() { setDeleting(true); try { await runtrace.deleteProject(slug); toast.success("Project deleted"); router.replace("/") } catch (error) { toast.error(error instanceof Error ? error.message : "Could not delete project"); setDeleting(false) } }
-  const bootstrap = `runtrace.get_project_context({ project: "${slug}" })`
+  async function save(event: FormEvent) { event.preventDefault(); setPending(true); try { await Promise.all([mono.updateProject(slug, description, repositoryUrl), mono.updateProgram(slug, program), mono.updateExclusions(slug, exclusions.split("\n")), mono.updateSettings(slug, metric, direction)]); toast.success("Project settings saved"); reload() } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save settings") } finally { setPending(false) } }
+  async function addTag() { const name = newTag.trim(); if (!name) return; setTagPending("new"); try { await mono.createTag(slug, name); setNewTag(""); toast.success("Filter created"); reload() } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create filter") } finally { setTagPending(null) } }
+  async function renameTag(id: string) { const name = tagNames[id]?.trim(); if (!name) return; setTagPending(id); try { await mono.updateTag(slug, id, name); toast.success("Filter updated"); reload() } catch (error) { toast.error(error instanceof Error ? error.message : "Could not update filter") } finally { setTagPending(null) } }
+  async function removeTag(id: string, name: string) { if (!window.confirm(`Delete “${name}”? It will also be removed from existing runs and experiments.`)) return; setTagPending(id); try { await mono.deleteTag(slug, id); toast.success("Filter deleted"); reload() } catch (error) { toast.error(error instanceof Error ? error.message : "Could not delete filter") } finally { setTagPending(null) } }
+  async function deleteProject() { setDeleting(true); try { await mono.deleteProject(slug); toast.success("Project deleted"); router.replace("/") } catch (error) { toast.error(error instanceof Error ? error.message : "Could not delete project"); setDeleting(false) } }
+  const bootstrap = `mono.get_project_context({ project: "${slug}" })`
   return <form onSubmit={save}><PageHeading title="Settings" description="Durable research context returned to every agent that bootstraps this project." actions={<Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>} />
     <div className="flex flex-col gap-6">
       <Card><CardHeader><CardTitle>Project goal</CardTitle><CardDescription>Shown on the dashboard and used to orient human supervisors.</CardDescription></CardHeader><CardContent><Field><FieldLabel htmlFor="goal">Goal</FieldLabel><Textarea id="goal" value={description} onChange={(event) => setDescription(event.target.value)} /></Field></CardContent></Card>
@@ -240,12 +240,12 @@ export function ProjectWorkspace({ slug, view }: { slug: string; view: ProjectVi
   const progressQuery = useRef({ metric: "", window: "all", includeTags: [] as string[], excludeTags: [] as string[] })
   const load = useCallback(async () => {
     const query = progressQuery.current
-    try { const [dashboard, progressData] = await Promise.all([runtrace.dashboard(slug), runtrace.progress(slug, query.metric, query.window, query.includeTags, query.excludeTags)]); loadedRef.current = true; setData(dashboard); setProgress(progressData); setError(null) }
+    try { const [dashboard, progressData] = await Promise.all([mono.dashboard(slug), mono.progress(slug, query.metric, query.window, query.includeTags, query.excludeTags)]); loadedRef.current = true; setData(dashboard); setProgress(progressData); setError(null) }
     catch (caught) { if (!loadedRef.current) setError(caught instanceof Error ? caught.message : "Could not load project") }
   }, [slug])
   useEffect(() => {
     let active = true
-    Promise.all([runtrace.dashboard(slug), runtrace.progress(slug)]).then(([dashboard, progressData]) => {
+    Promise.all([mono.dashboard(slug), mono.progress(slug)]).then(([dashboard, progressData]) => {
       if (!active) return
       loadedRef.current = true; setData(dashboard); setProgress(progressData); setError(null)
     }).catch((caught) => {
@@ -255,7 +255,7 @@ export function ProjectWorkspace({ slug, view }: { slug: string; view: ProjectVi
   }, [slug])
   useAutoRefresh(load)
 
-  if (error) return <main className="grid min-h-screen place-items-center p-6"><Empty className="max-w-lg border"><EmptyHeader><EmptyMedia variant="icon"><Database /></EmptyMedia><EmptyTitle>RunTrace API unavailable</EmptyTitle><EmptyDescription>{error}</EmptyDescription></EmptyHeader><Button onClick={load}>Try again</Button></Empty></main>
+  if (error) return <main className="grid min-h-screen place-items-center p-6"><Empty className="max-w-lg border"><EmptyHeader><EmptyMedia variant="icon"><Database /></EmptyMedia><EmptyTitle>Mono API unavailable</EmptyTitle><EmptyDescription>{error}</EmptyDescription></EmptyHeader><Button onClick={load}>Try again</Button></Empty></main>
   if (!data || !progress) return <div className="min-h-screen xl:grid xl:grid-cols-[248px_minmax(0,1fr)]"><div className="hidden border-r bg-sidebar xl:block" /><main className="mx-auto w-full min-w-0 max-w-[1240px] p-8"><Skeleton className="h-10 w-64" /><Skeleton className="mt-8 h-80" /><Skeleton className="mt-6 h-36" /></main></div>
   const { canEdit, canManage } = projectCapabilities(data.access_role)
   return <ProjectShell project={data.project} accessRole={data.access_role}>
