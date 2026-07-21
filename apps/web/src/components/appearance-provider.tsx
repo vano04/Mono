@@ -44,6 +44,12 @@ function foregroundFor(background: string) {
   return luminance > 0.45 ? "#171717" : "#ffffff"
 }
 
+function faviconFor(accent: string) {
+  const foreground = foregroundFor(accent)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="${accent}"/><g fill="none" stroke="${foreground}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"><path d="M19.75 9.25a11.25 11.25 0 0 0-11.25 11.25V5.5"/><circle cx="23.5" cy="9.25" r="3.75"/><circle cx="8.5" cy="24.25" r="3.75"/></g></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
 function AppearanceState({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState<AppearancePreferences>(readPreferences)
 
@@ -54,6 +60,17 @@ function AppearanceState({ children }: { children: React.ReactNode }) {
     root.style.setProperty("--ring", preferences.accent)
     root.style.setProperty("--sidebar-primary", preferences.accent)
     root.dataset.density = preferences.compactRows ? "compact" : "comfortable"
+
+    let favicon = document.querySelector<HTMLLinkElement>('link[data-runtrace-icon]')
+    if (!favicon) {
+      favicon = document.createElement("link")
+      favicon.rel = "icon"
+      favicon.type = "image/svg+xml"
+      favicon.dataset.runtraceIcon = ""
+      document.head.appendChild(favicon)
+    }
+    favicon.href = faviconFor(preferences.accent)
+
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
   }, [preferences])
 
