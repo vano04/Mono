@@ -47,7 +47,7 @@ uvx --from runtrace-ai \
   runtrace search PROJECT "prior evidence"
 ```
 
-Tagged releases attach a wheel and source distribution to GitHub Releases. A manually approved PyPI Trusted Publishing workflow is included for use after the project is registered on PyPI.
+Tagged releases attach a wheel and source distribution to GitHub Releases and publish the same version through PyPI Trusted Publishing. The PyPI workflow also supports validated exact-tag manual recovery.
 
 ## Python package
 
@@ -119,7 +119,7 @@ Or run `runtrace integrations install claude`, then run `runtrace auth`.
 Any stdio MCP host can run:
 
 ```bash
-uvx --from 'runtrace-ai[mcp]==0.1.3' runtrace-mcp
+uvx --from 'runtrace-ai[mcp]==0.1.4' runtrace-mcp
 ```
 
 The host needs `uv` plus either credentials saved by `runtrace auth` or the `RUNTRACE_BASE_URL` and `RUNTRACE_API_TOKEN` environment variables. Its first launch needs network access to GitHub and the Python package index.

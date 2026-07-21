@@ -25,8 +25,14 @@ jobs:
           enable-cache: true
       - name: Install Python dependencies
         run: uv sync --locked --all-extras
+      - name: Verify release version consistency
+        run: uv run python scripts/check_release_version.py
       - name: Run tests
         run: uv run pytest
+      - name: Build distributions
+        run: uv build
+      - name: Verify distributions
+        run: uv run --with twine twine check dist/*
 
   web:
     name: Web lint and build
@@ -41,8 +47,12 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: Install dependencies
         run: npm --prefix apps/web ci
+      - name: Test
+        run: npm --prefix apps/web test
       - name: Lint
         run: npm --prefix apps/web run lint
+      - name: Typecheck
+        run: npm --prefix apps/web run typecheck
       - name: Build
         run: npm --prefix apps/web run build
       - name: Validate Compose configuration

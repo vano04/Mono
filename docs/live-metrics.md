@@ -147,7 +147,7 @@ curl --fail \
 Install the RunTrace plugin for Codex or Claude Code, or configure any stdio MCP host to run:
 
 ```bash
-uvx --from 'runtrace-ai[mcp]==0.1.3' runtrace-mcp
+uvx --from 'runtrace-ai[mcp]==0.1.4' runtrace-mcp
 ```
 
 An agent can then use this sequence:

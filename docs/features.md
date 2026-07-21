@@ -1,6 +1,6 @@
 # RunTrace feature catalog
 
-This catalog describes the current repository source (package metadata `0.1.3`). It distinguishes public product behavior from internal records and migration-only compatibility tables; published artifacts can lag the source and are tracked in [verification-report.md](verification-report.md).
+This catalog describes the current repository source (package metadata `0.1.4`). It distinguishes public product behavior from internal records and migration-only compatibility tables; published artifacts can lag the source and are tracked in [verification-report.md](verification-report.md).
 
 ## Product surfaces
 
@@ -356,7 +356,7 @@ Its 32 tools are:
 - GHCR deployment overlay plus workflows for versioned API/web images; actual public tag availability is recorded separately in the verification report.
 - GitHub Actions CI runs the locked Python suite, web lint/build, and Compose validation for pushes and pull requests.
 - Version tags build and Twine-check wheel/source distributions and attach them to a GitHub Release.
-- Direct `v*` tag pushes or validated exact-tag manual dispatch build provenance-attested `linux/amd64` API and web images for GHCR; a separately approved manual workflow publishes to PyPI with trusted publishing.
+- Direct `v*` tag pushes publish GitHub release artifacts, the trusted-publishing PyPI distribution, and provenance-attested `linux/amd64` API/web images for GHCR; PyPI and container workflows also support validated exact-tag manual recovery.
 - Optional demo seed with projects, proposals, runs, metrics, exclusions, and recorded workers, plus a live metric loop and pending-claim keepalive loop.
 - Optional FastEmbed semantic indexing; Compose leaves it disabled by default.
 - Codex and Claude marketplace/plugin bundles with workflow, setup, and visualization skills.
