@@ -130,7 +130,7 @@ Only Codex was used for agentic feature testing. Four separate Luna xhigh tasks 
 | SDK/CLI | `019f8392-d39e-73b1-ab24-9cf706c121b6` | SDK-owned and attached runs, metrics, events, parameters, artifacts, CLI success, and CLI failure passed. |
 | RTVis | `019f8392-d65b-7f20-8f9d-898169b305e6` | Guides, preview/generate/get/list/update, revision, export/import, custom result type, and cleanup passed. Invalid preview errors remain terse through the MCP client but are correctly rejected. |
 
-The published `runtrace-ai==0.1.3` CLI reproduced an older double-terminal failure path: a child exit 23 became a traceback/exit 1. Current source returns the exact child exit 23, records one crash, suppresses a second context-exit abort, and has a regression test. A refreshed distribution is required for installed users to receive that fix and the current MCP `worker_id` schema.
+The published `runtrace-ai==0.1.3` CLI reproduced an older double-terminal failure path: a child exit 23 became a traceback/exit 1. Version 0.1.4 returns the exact child exit 23, records one crash, suppresses a second context-exit abort, and includes the regression test and current MCP `worker_id` schema.
 
 ## Defects fixed
 
@@ -158,9 +158,9 @@ The published `runtrace-ai==0.1.3` CLI reproduced an older double-terminal failu
 ## Distribution and remaining boundaries
 
 - Public GHCR `0.1.2` and `0.1.3` API/web tags were absent during verification; `latest` still identified 0.1.1 at revision `4134d97…`. Disposable default-entrypoint health smokes for the available 0.1.1 runtime and web images passed.
-- The workflow repair is local, uncommitted source. The configured `vano04` GitHub credential is valid with repository, workflow, and package-write access, but manual 0.1.3 backfill was not dispatched because publishing packages is external release state. Review and commit the workflow change, then dispatch the exact release tag or publish a new version containing these fixes.
-- The installed PyPI/plugin artifacts predate current source fixes as described above; they need a versioned distribution/plugin refresh.
+- The repaired tag-driven container workflow is included in version 0.1.4, alongside tag/version validation for release artifacts and PyPI publication.
+- Version 0.1.4 refreshes the PyPI distribution and plugin launch metadata with the verified source fixes described above.
 - One-time setup-link expiry and 1–365-day token expiry have automated coverage but were not observed for hours/days in real time.
 - English and Spanish were exercised live; all 11 locale catalogs build and type-check, but no manual visual sweep was performed for every translated string.
 - Install/update/reset scripts were parsed and their critical path/root logic was validated. They were not run against the user's persistent original deployment because source image rebuilds, repeated container recreation with preserved data, and exact disposable-volume teardown supplied the relevant runtime evidence without risking that deployment.
-- Public PyPI/GHCR release publication was intentionally not performed. No other local permission-limited feature remains.
+- Version 0.1.4 publication is handled by the tag-driven GitHub Release, PyPI, and GHCR workflows. No other local permission-limited feature remains.

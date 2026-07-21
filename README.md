@@ -57,7 +57,7 @@ To deploy the published GitHub Container packages instead of building locally:
 docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
 ```
 
-The overlay defaults to `ghcr.io/vano04/runtrace:0.1.3` and `ghcr.io/vano04/runtrace-web:0.1.3`. Confirm that the selected tag exists in GitHub Packages or set `RUNTRACE_VERSION` to an available release. The 2026-07-21 verification found that the public 0.1.3 container tags had not yet been backfilled, so build from source for the current behavior until those images are published.
+The overlay defaults to `ghcr.io/vano04/runtrace:0.1.4` and `ghcr.io/vano04/runtrace-web:0.1.4`. Confirm that the selected tag exists in GitHub Packages or set `RUNTRACE_VERSION` to another published release.
 
 Useful endpoints:
 
@@ -143,7 +143,7 @@ Agent loops should claim one proposal at a time. When `create_run` starts a pend
 Run the MCP server over stdio without a persistent install:
 
 ```bash
-uvx --from 'runtrace-ai[mcp]==0.1.3' runtrace-mcp
+uvx --from 'runtrace-ai[mcp]==0.1.4' runtrace-mcp
 ```
 
 Public packages can lag this checkout. To exercise the exact current source during development, use `uv run --extra mcp runtrace-mcp`; consult the verification report before relying on a pinned published artifact.

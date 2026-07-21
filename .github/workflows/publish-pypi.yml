@@ -1,20 +1,49 @@
 name: Publish Python package
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Release tag to publish (for example v0.1.4)
+        required: true
+        default: v0.1.4
 
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: pypi-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     environment: pypi
     steps:
+      - name: Resolve version
+        id: version
+        env:
+          RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+        run: |
+          if ! printf '%s\n' "$RELEASE_REF" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+            echo "Expected a version tag such as v0.1.4; got: $RELEASE_REF" >&2
+            exit 1
+          fi
+          echo "ref=refs/tags/$RELEASE_REF" >> "$GITHUB_OUTPUT"
+          echo "version=${RELEASE_REF#v}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.version.outputs.ref }}
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           version: "0.11.28"
+      - name: Verify release version
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: uv run --no-project python scripts/check_release_version.py --expected "$RELEASE_VERSION"
       - run: uv build
+      - run: uv run --with twine twine check dist/*
       - run: uv publish --trusted-publishing always
