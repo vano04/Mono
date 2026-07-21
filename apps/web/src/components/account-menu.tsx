@@ -22,12 +22,13 @@ export function AccountMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuGroup>
-          <DropdownMenuLabel><span className="block truncate text-foreground">{identity.username}</span><span className="block font-normal capitalize">{status.dev ? t("Dev · no auth") : identity.role}</span></DropdownMenuLabel>
+          <DropdownMenuLabel><span className="block truncate text-foreground">{identity.username}</span><span className="block font-normal capitalize">{status.demo ? t("Demo · viewer") : status.dev ? t("Dev · no auth") : identity.role}</span></DropdownMenuLabel>
         </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem render={<Link href="/access" />}><ShieldCheck />{identity.role === "member" ? t("Agent tokens") : t("Access")}</DropdownMenuItem>
-        <DropdownMenuItem render={<Link href="/account" />}><Settings />{t("Settings")}</DropdownMenuItem>
-        {!status.dev ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => signOut().catch(() => toast.error(t("Could not sign out")))}><LogOut />{t("Sign out")}</DropdownMenuItem></> : null}
+        {!status.demo ? <><DropdownMenuSeparator />
+          <DropdownMenuItem render={<Link href="/access" />}><ShieldCheck />{identity.role === "member" ? t("Agent tokens") : t("Access")}</DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/account" />}><Settings />{t("Settings")}</DropdownMenuItem>
+          {!status.dev ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => signOut().catch(() => toast.error(t("Could not sign out")))}><LogOut />{t("Sign out")}</DropdownMenuItem></> : null}
+        </> : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

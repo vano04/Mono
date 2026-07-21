@@ -42,7 +42,10 @@ export default function DocsPage() {
           <Code>{`docker compose up --build
 
 # Seeded development preview
-RUNTRACE_DEV=true docker compose up --build`}</Code>
+RUNTRACE_DEV=true docker compose up --build
+
+# Real app, seeded and server-enforced read-only
+RUNTRACE_DEMO=true docker compose up --build`}</Code>
           <p>{t("For native Python development, install the workspace package and save the known local connection once:")}</p>
           <Code>{`uv sync --all-extras
 uv run runtrace auth rt_runtrace_dev --base-url http://localhost:8000`}</Code>

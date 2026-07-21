@@ -37,6 +37,7 @@ class AuthPrincipal:
     role: str
     status: str
     dev: bool = False
+    demo: bool = False
     token_project_ids: frozenset[str] | None = None
 
 
@@ -252,6 +253,8 @@ def _authorize_project_request(session: Session, principal: AuthPrincipal, path:
         return
     if principal.token_project_ids is not None and project_id not in principal.token_project_ids:
         raise HTTPException(403, "This API token is not authorized for this project")
+    if principal.demo:
+        return
     if principal.dev or principal.role in {"owner", "admin"}:
         return
     role = session.scalar(select(ProjectMembership.role).where(
@@ -289,53 +292,73 @@ def _set_session(response: Response, session: Session, identity: Identity) -> No
 
 async def authenticate_request(request: Request, call_next):
     request.state.identity = None
-    if settings.dev:
+    if settings.demo:
+        request.state.identity = AuthPrincipal("demo", "Demo viewer", "member", "active", demo=True)
+    elif settings.dev:
         request.state.identity = AuthPrincipal("dev", "Development", "owner", "active", True)
         return await call_next(request)
-
-    raw_token = request.cookies.get(SESSION_COOKIE)
-    authorization = request.headers.get("authorization", "")
-    bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else None
-    configured = False
-    with SessionLocal() as session:
-        configured = bool(session.scalar(select(func.count()).select_from(Identity)))
-        if bearer_token:
-            api_token = session.scalar(
-                select(ApiToken)
-                .options(selectinload(ApiToken.identity), selectinload(ApiToken.project_grants))
-                .where(ApiToken.token_hash == _hash(bearer_token))
-            )
-            if (
-                api_token
-                and api_token.identity.status == "active"
-                and (api_token.expires_at is None or _aware(api_token.expires_at) > now_utc())
-            ):
-                identity = api_token.identity
-                request.state.identity = AuthPrincipal(
-                    identity.id, identity.username, identity.role, identity.status,
-                    token_project_ids=frozenset(grant.project_id for grant in api_token.project_grants),
+    else:
+        raw_token = request.cookies.get(SESSION_COOKIE)
+        authorization = request.headers.get("authorization", "")
+        bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else None
+        with SessionLocal() as session:
+            if bearer_token:
+                api_token = session.scalar(
+                    select(ApiToken)
+                    .options(selectinload(ApiToken.identity), selectinload(ApiToken.project_grants))
+                    .where(ApiToken.token_hash == _hash(bearer_token))
                 )
-                if not api_token.last_used_at or now_utc() - _aware(api_token.last_used_at) > timedelta(minutes=5):
-                    api_token.last_used_at = now_utc()
-                    identity.last_active_at = now_utc()
+                if (
+                    api_token
+                    and api_token.identity.status == "active"
+                    and (api_token.expires_at is None or _aware(api_token.expires_at) > now_utc())
+                ):
+                    identity = api_token.identity
+                    request.state.identity = AuthPrincipal(
+                        identity.id, identity.username, identity.role, identity.status,
+                        token_project_ids=frozenset(grant.project_id for grant in api_token.project_grants),
+                    )
+                    if not api_token.last_used_at or now_utc() - _aware(api_token.last_used_at) > timedelta(minutes=5):
+                        api_token.last_used_at = now_utc()
+                        identity.last_active_at = now_utc()
+                        session.commit()
+            if raw_token and not request.state.identity:
+                auth_session = session.scalar(
+                    select(AuthSession)
+                    .options(selectinload(AuthSession.identity))
+                    .where(AuthSession.token_hash == _hash(raw_token))
+                )
+                if auth_session and _aware(auth_session.expires_at) > now_utc() and auth_session.identity.status == "active":
+                    identity = auth_session.identity
+                    request.state.identity = AuthPrincipal(identity.id, identity.username, identity.role, identity.status)
+                    if not identity.last_active_at or now_utc() - _aware(identity.last_active_at) > timedelta(minutes=5):
+                        identity.last_active_at = now_utc()
+                        session.commit()
+                elif auth_session:
+                    session.delete(auth_session)
                     session.commit()
-        if raw_token and not request.state.identity:
-            auth_session = session.scalar(
-                select(AuthSession)
-                .options(selectinload(AuthSession.identity))
-                .where(AuthSession.token_hash == _hash(raw_token))
-            )
-            if auth_session and _aware(auth_session.expires_at) > now_utc() and auth_session.identity.status == "active":
-                identity = auth_session.identity
-                request.state.identity = AuthPrincipal(identity.id, identity.username, identity.role, identity.status)
-                if not identity.last_active_at or now_utc() - _aware(identity.last_active_at) > timedelta(minutes=5):
-                    identity.last_active_at = now_utc()
-                    session.commit()
-            elif auth_session:
-                session.delete(auth_session)
-                session.commit()
 
     path = request.url.path
+    configured = settings.demo
+    if not configured:
+        with SessionLocal() as session:
+            configured = bool(session.scalar(select(func.count()).select_from(Identity)))
+    demo_read_actions = {
+        ("POST", "/api/v1/search"),
+    }
+    demo_visualization_preview = request.method == "POST" and bool(re.match(r"^/api/v1/projects/[^/]+/visualizations/preview$", path))
+    if (
+        settings.demo
+        and path.startswith("/api/")
+        and request.method not in {"GET", "HEAD", "OPTIONS"}
+        and (request.method, path) not in demo_read_actions
+        and not demo_visualization_preview
+    ):
+        return Response(
+            content=json.dumps({"detail": "Demo mode is read-only"}),
+            status_code=403,
+            media_type="application/json",
+        )
     if path == "/health" or path.startswith("/api/v1/auth/"):
         return await call_next(request)
     if path.startswith("/api/") and not request.state.identity:
@@ -353,10 +376,11 @@ async def authenticate_request(request: Request, call_next):
 @router.get("/status")
 def auth_status(request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
     principal = getattr(request.state, "identity", None)
-    configured = bool(session.scalar(select(func.count()).select_from(Identity)))
-    identity = session.get(Identity, principal.id) if principal and not principal.dev else None
+    configured = settings.demo or bool(session.scalar(select(func.count()).select_from(Identity)))
+    identity = session.get(Identity, principal.id) if principal and not principal.dev and not principal.demo else None
     return {
         "dev": settings.dev,
+        "demo": settings.demo,
         "configured": configured,
         "authenticated": bool(principal),
         "identity": None if not principal else {
@@ -364,12 +388,12 @@ def auth_status(request: Request, session: Session = Depends(get_db)) -> dict[st
             "username": principal.username,
             "role": principal.role,
             "status": principal.status,
-            "password_set": True if principal.dev else bool(identity and identity.password_hash),
-            "onboarding_completed": True if principal.dev else bool(identity and identity.onboarding_completed_at),
-            "locale": "en" if principal.dev else (identity.locale if identity else "en"),
-            "theme": "system" if principal.dev else (identity.theme if identity else "system"),
-            "accent_color": "#4f46e5" if principal.dev else (identity.accent_color if identity else "#4f46e5"),
-            "compact_rows": False if principal.dev else bool(identity and identity.compact_rows),
+            "password_set": True if principal.dev or principal.demo else bool(identity and identity.password_hash),
+            "onboarding_completed": True if principal.dev or principal.demo else bool(identity and identity.onboarding_completed_at),
+            "locale": "en" if principal.dev or principal.demo else (identity.locale if identity else "en"),
+            "theme": "system" if principal.dev or principal.demo else (identity.theme if identity else "system"),
+            "accent_color": "#4f46e5" if principal.dev or principal.demo else (identity.accent_color if identity else "#4f46e5"),
+            "compact_rows": False if principal.dev or principal.demo else bool(identity and identity.compact_rows),
         },
     }
 

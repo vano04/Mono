@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { AppSettingsLink } from "@/components/app-settings-link"
 import { AccountMenu } from "@/components/account-menu"
+import { useAuth } from "@/components/auth-provider"
 import { useAppearance } from "@/components/appearance-provider"
 import { CreateProjectDialog } from "@/components/create-project-dialog"
 import { RunTraceLogo } from "@/components/runtrace-logo"
@@ -27,6 +28,7 @@ export function ProjectsScreen() {
   const [query, setQuery] = useState("")
   const { compactRows } = useAppearance()
   const { locale, t } = useI18n()
+  const { status } = useAuth()
 
   const load = useCallback(async () => {
     try {
@@ -55,18 +57,18 @@ export function ProjectsScreen() {
         <RunTraceLogo />
         <div className="flex items-center gap-1">
           <Button variant="ghost" render={<Link href="/docs" />} nativeButton={false}><BookOpen data-icon="inline-start" />{t("Docs")}</Button>
-          <AppSettingsLink />
+          {!status.demo ? <AppSettingsLink /> : null}
           <AccountMenu />
         </div>
       </header>
       <section className="py-8 sm:py-12">
         <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="flex flex-col gap-2">
-            <Badge variant="outline" className="w-fit">{t("Research registry")}</Badge>
+            <div className="flex flex-wrap gap-2"><Badge variant="outline" className="w-fit">{t("Research registry")}</Badge>{status.demo ? <Badge variant="secondary" className="w-fit">{t("Read-only demo")}</Badge> : null}</div>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{t("Pick up where the research left off.")}</h1>
             <p className="max-w-2xl text-muted-foreground">{t("Every project keeps experiments, agent decisions, metrics, and conclusions in one durable workspace.")}</p>
           </div>
-          <CreateProjectDialog onCreated={(project) => setProjects((current) => [project, ...(current ?? [])])} />
+          {!status.demo ? <CreateProjectDialog onCreated={(project) => setProjects((current) => [project, ...(current ?? [])])} /> : null}
         </div>
 
         {projects === null ? (
@@ -78,7 +80,7 @@ export function ProjectsScreen() {
               <EmptyTitle>{t("No projects yet")}</EmptyTitle>
               <EmptyDescription>{t("Create your first registry, then connect an agent through the SDK, CLI, HTTP API, or MCP.")}</EmptyDescription>
             </EmptyHeader>
-            <EmptyContent><CreateProjectDialog onCreated={(project) => setProjects([project])} /></EmptyContent>
+            {!status.demo ? <EmptyContent><CreateProjectDialog onCreated={(project) => setProjects([project])} /></EmptyContent> : null}
           </Empty>
         ) : (
           <Card className="mb-8 sm:mb-12">

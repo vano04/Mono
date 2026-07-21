@@ -8,6 +8,7 @@ os.environ["RUNTRACE_DATABASE_URL"] = f"sqlite:///{TEST_ROOT / 'test.db'}"
 os.environ["RUNTRACE_ARTIFACT_PATH"] = str(TEST_ROOT / "artifacts")
 os.environ["RUNTRACE_SEED_DEMO"] = "true"
 os.environ["RUNTRACE_DEV"] = "true"
+os.environ["RUNTRACE_DEMO"] = "false"
 
 
 import pytest  # noqa: E402

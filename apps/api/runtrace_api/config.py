@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     embedding_cache_path: Path = ROOT / "data" / "models"
     claim_timeout_seconds: int = 300
     dev: bool = False
+    demo: bool = False
     secure_session_cookie: bool = False
     owner_recovery_password: str = ""
     session_ttl_hours: int = 168

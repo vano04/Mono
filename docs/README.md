@@ -28,6 +28,14 @@ RUNTRACE_DEV=true docker compose up -d --build
 
 Development mode is for a trusted workstation only. It is not a production authentication option.
 
+Demo mode runs the same web app and seeded dataset with server-enforced viewer access:
+
+```bash
+RUNTRACE_DEMO=true docker compose up -d --build
+```
+
+Visitors are signed in automatically as demo viewers. The web app hides mutation controls, while the API rejects all state-changing requests with `403 Demo mode is read-only`. Read-only search, downloads, dashboards, and live seeded metrics continue to work. Keep `RUNTRACE_DEV=false`; put only the web service behind your public reverse proxy when possible.
+
 ## Production checklist
 
 Before exposing RunTrace on a network:
@@ -37,7 +45,7 @@ Before exposing RunTrace on a network:
 3. Set `RUNTRACE_SECURE_SESSION_COOKIE=true` when HTTPS is enabled.
 4. Replace the example PostgreSQL credentials in `docker-compose.yml` or supply an environment-specific Compose override and secret management.
 5. Keep PostgreSQL and the API private to the host or internal network where possible. The checked-in Compose file publishes the API on port 8000 for local development and diagnostics.
-6. Keep `RUNTRACE_DEV=false` and `RUNTRACE_SEED_DEMO=false`.
+6. Keep `RUNTRACE_DEV=false`, and use `RUNTRACE_DEMO=true` only for an intentionally public read-only demo. Keep both `RUNTRACE_DEMO=false` and `RUNTRACE_SEED_DEMO=false` for a normal deployment.
 7. Arrange database and artifact-volume backups, then test restoration.
 8. Create separate expiring agent tokens for each CLI or MCP host and store them in that host's secret manager.
 9. Add resource limits, log collection, and monitoring appropriate to the host.
@@ -48,6 +56,7 @@ Compose accepts these deployment values from the shell or a local `.env` file:
 
 ```env
 RUNTRACE_DEV=false
+RUNTRACE_DEMO=false
 RUNTRACE_CORS_ORIGINS=https://runtrace.example.com
 RUNTRACE_SECURE_SESSION_COOKIE=true
 RUNTRACE_SESSION_TTL_HOURS=168
@@ -91,6 +100,7 @@ Do not run two application versions against the same database during a schema mi
 ```bash
 docker compose config
 RUNTRACE_DEV=true docker compose config
+RUNTRACE_DEMO=true docker compose config
 curl --fail http://localhost:8000/health
 ```
 

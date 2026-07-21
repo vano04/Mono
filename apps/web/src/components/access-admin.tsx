@@ -146,7 +146,7 @@ function AddTokenDialog({ projects, onCreated }: { projects: Project[]; onCreate
 }
 
 export function AccessAdmin() {
-  const { identity: current } = useAuth()
+  const { identity: current, status: authStatus } = useAuth()
   const [identities, setIdentities] = useState<AuthIdentity[] | null>(null)
   const [query, setQuery] = useState("")
   const [role, setRole] = useState<"all" | IdentityRole>("all")
@@ -157,12 +157,17 @@ export function AccessAdmin() {
 
   const load = () => auth.identities().then(setIdentities).catch((error) => { toast.error(error instanceof Error ? error.message : "Could not load identities"); setIdentities([]) })
   const loadTokens = () => auth.tokens().then(setTokens).catch((error) => { toast.error(error instanceof Error ? error.message : "Could not load tokens"); setTokens([]) })
-  useEffect(() => { if (isAdmin) void load(); void loadTokens(); void runtrace.projects().then(setProjects) }, [isAdmin])
+  useEffect(() => { if (authStatus.demo) return; if (isAdmin) void load(); void loadTokens(); void runtrace.projects().then(setProjects) }, [authStatus.demo, isAdmin])
 
   const filtered = useMemo(() => (identities ?? []).filter((item) => {
     const matchesQuery = item.username.toLowerCase().includes(query.toLowerCase())
     return matchesQuery && (role === "all" || item.role === role) && (status === "all" || item.status === status)
   }), [identities, query, role, status])
+
+  if (authStatus.demo) return <main className="min-h-screen">
+    <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><RunTraceLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />Projects</Button></div><AccountMenu /></header>
+    <section className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-8 sm:py-16"><Empty className="min-h-72 border"><EmptyHeader><EmptyMedia variant="icon"><ShieldCheck /></EmptyMedia><EmptyTitle>Read-only demo</EmptyTitle><EmptyDescription>Identities and agent tokens cannot be managed in demo mode.</EmptyDescription></EmptyHeader></Empty></section>
+  </main>
 
   const replace = (updated: AuthIdentity) => setIdentities((items) => (items ?? []).map((item) => item.id === updated.id ? { ...item, ...updated } : item))
   const mutate = (id: string, body: { role?: "admin" | "member"; status?: "active" | "suspended" }) => auth.updateIdentity(id, body).then((updated) => { replace(updated); toast.success("Access updated") }).catch((error) => toast.error(error instanceof Error ? error.message : "Could not update access"))

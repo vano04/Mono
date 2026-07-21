@@ -78,7 +78,7 @@ async def lifespan(_: FastAPI):
     startup()
     demo_tasks = (
         [asyncio.create_task(demo_metric_loop()), asyncio.create_task(demo_claim_loop())]
-        if settings.seed_demo
+        if settings.seed_demo or settings.demo
         else []
     )
     try:
@@ -129,7 +129,7 @@ def startup() -> None:
     if settings.owner_recovery_password:
         with SessionLocal() as session:
             apply_owner_recovery_password(session)
-    if settings.seed_demo:
+    if settings.seed_demo or settings.demo:
         with SessionLocal() as session:
             seed_demo(session)
             requeue_expired_claims(session)
@@ -184,6 +184,8 @@ def get_project(session: Session, identifier: str, *, for_update: bool = False) 
 
 
 def project_access_role(session: Session, project_id: str, principal: AuthPrincipal) -> str:
+    if principal.demo:
+        return "viewer"
     if principal.dev or principal.role in {"owner", "admin"}:
         return "owner"
     return session.scalar(select(ProjectMembership.role).where(
@@ -633,7 +635,7 @@ def create_project(body: ProjectCreate, request: Request, session: Session = Dep
 def list_projects(request: Request, session: Session = Depends(get_db)) -> list[dict]:
     principal = request.state.identity
     query = select(Project).order_by(Project.name)
-    if not principal.dev and principal.role not in {"owner", "admin"}:
+    if not principal.dev and not principal.demo and principal.role not in {"owner", "admin"}:
         query = query.join(ProjectMembership).where(ProjectMembership.identity_id == principal.id)
     if principal.token_project_ids is not None:
         query = query.where(Project.id.in_(principal.token_project_ids))
@@ -1521,7 +1523,7 @@ def search(body: SearchRequest, request: Request, session: Session = Depends(get
     principal = request.state.identity
     if principal.token_project_ids is not None and current.id not in principal.token_project_ids:
         raise HTTPException(403, "This API token is not authorized for this project")
-    if not principal.dev and principal.role not in {"owner", "admin"} and not session.scalar(select(ProjectMembership.id).where(ProjectMembership.project_id == current.id, ProjectMembership.identity_id == principal.id)):
+    if not principal.dev and not principal.demo and principal.role not in {"owner", "admin"} and not session.scalar(select(ProjectMembership.id).where(ProjectMembership.project_id == current.id, ProjectMembership.identity_id == principal.id)):
         raise HTTPException(403, "You do not have access to this project")
     results = search_records(session, body)
     return {"query": body.query, "project": body.project, "count": len(results), "results": results}

@@ -95,6 +95,14 @@ RUNTRACE_DEV=true docker compose up --build
 
 `RUNTRACE_DEV=true` disables authentication. Never enable it on a network-reachable deployment. Demo data is inserted only when the database has no projects.
 
+To host the real RunTrace interface as a public, read-only demo, use demo mode instead:
+
+```bash
+RUNTRACE_DEMO=true docker compose up -d --build
+```
+
+`RUNTRACE_DEMO=true` seeds the same demonstration records into an empty database, signs visitors in as viewers, hides mutation controls in the web app, and rejects create, update, archive, upload, token, access, and delete requests in the API. Read-only search, artifact viewing, and live demo metrics remain available. Do not combine it with `RUNTRACE_DEV=true`.
+
 Local clients use the known development key `rt_runtrace_dev`. The API remains unauthenticated in this mode, but using one stable client credential makes the CLI and agent plugins follow the same connection path as a normal deployment.
 
 To deliberately erase the Compose volumes and recreate the demo:
@@ -196,6 +204,7 @@ If the RunTrace CLI is already installed, `runtrace integrations install codex` 
 | `RUNTRACE_ARTIFACT_PATH` | Local artifact storage directory |
 | `RUNTRACE_CORS_ORIGINS` | Comma-separated browser origins |
 | `RUNTRACE_DEV` | Disable auth for trusted local development only |
+| `RUNTRACE_DEMO` | Serve the seeded application as an unauthenticated, server-enforced read-only viewer |
 | `RUNTRACE_SEED_DEMO` | Seed an empty database with demo records |
 | `RUNTRACE_EMBEDDINGS_ENABLED` | Enable FastEmbed semantic indexing |
 | `RUNTRACE_SECURE_SESSION_COOKIE` | Mark browser cookies Secure when the public origin uses HTTPS |
@@ -218,6 +227,7 @@ npm --prefix apps/web run build
 docker compose config
 docker compose -f docker-compose.yml -f docker-compose.ghcr.yml config
 RUNTRACE_DEV=true docker compose config
+RUNTRACE_DEMO=true docker compose config
 ```
 
 ## Repository layout

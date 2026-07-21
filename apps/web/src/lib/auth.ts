@@ -40,6 +40,7 @@ export interface ApiToken {
 
 export interface AuthStatus {
   dev: boolean
+  demo: boolean
   configured: boolean
   authenticated: boolean
   identity: AuthIdentity | null

@@ -13,6 +13,7 @@ def test_dev_mode_bypasses_authentication(fresh_database):
     status = fresh_database.get("/api/v1/auth/status")
     assert status.status_code == 200
     assert status.json()["dev"] is True
+    assert status.json()["demo"] is False
     assert status.json()["identity"]["role"] == "owner"
     assert fresh_database.get("/api/v1/projects").status_code == 200
     token = fresh_database.post("/api/v1/auth/tokens", json={"name": "Unavailable in dev mode"})
@@ -23,7 +24,7 @@ def test_dev_mode_bypasses_authentication(fresh_database):
 def test_normal_mode_requires_bootstrap_then_a_session(fresh_database, monkeypatch):
     monkeypatch.setattr(settings, "dev", False)
     status = fresh_database.get("/api/v1/auth/status").json()
-    assert status == {"dev": False, "configured": False, "authenticated": False, "identity": None}
+    assert status == {"dev": False, "demo": False, "configured": False, "authenticated": False, "identity": None}
     blocked = fresh_database.get("/api/v1/projects")
     assert blocked.status_code == 428
 
@@ -32,6 +33,53 @@ def test_normal_mode_requires_bootstrap_then_a_session(fresh_database, monkeypat
         session.commit()
 
     assert fresh_database.get("/api/v1/projects").status_code == 401
+
+
+def test_demo_mode_uses_real_viewer_access_and_rejects_mutations(fresh_database, monkeypatch):
+    monkeypatch.setattr(settings, "dev", False)
+    monkeypatch.setattr(settings, "demo", True)
+
+    status = fresh_database.get("/api/v1/auth/status")
+    assert status.status_code == 200
+    assert status.json() == {
+        "dev": False,
+        "demo": True,
+        "configured": True,
+        "authenticated": True,
+        "identity": {
+            "id": "demo",
+            "username": "Demo viewer",
+            "role": "member",
+            "status": "active",
+            "password_set": True,
+            "onboarding_completed": True,
+            "locale": "en",
+            "theme": "system",
+            "accent_color": "#4f46e5",
+            "compact_rows": False,
+        },
+    }
+
+    projects = fresh_database.get("/api/v1/projects")
+    assert projects.status_code == 200
+    assert projects.json()
+    slug = projects.json()[0]["slug"]
+    assert fresh_database.get(f"/api/v1/projects/{slug}/dashboard").json()["access_role"] == "viewer"
+    assert fresh_database.get(f"/api/v1/projects/{slug}/search", params={"q": ""}).status_code == 200
+    assert fresh_database.post("/api/v1/search", json={"project": slug, "query": ""}).status_code == 200
+
+    blocked_requests = [
+        fresh_database.post("/api/v1/projects", json={"name": "Blocked", "slug": "blocked"}),
+        fresh_database.post(f"/api/v1/projects/{slug}/experiments", json={"title": "Blocked", "hypothesis": "Blocked"}),
+        fresh_database.patch("/api/v1/auth/preferences", json={"theme": "dark"}),
+        fresh_database.post("/api/v1/auth/login", json={"username": "owner", "password": "not-used"}),
+        fresh_database.delete(f"/api/v1/projects/{slug}"),
+    ]
+    for response in blocked_requests:
+        assert response.status_code == 403
+        assert response.json() == {"detail": "Demo mode is read-only"}
+
+    assert len(fresh_database.get("/api/v1/projects").json()) == len(projects.json())
 
 
 def test_owner_bootstrap_and_password_login(fresh_database, monkeypatch):

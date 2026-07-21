@@ -18,13 +18,18 @@ import { localeNames, supportedLocales, type Locale } from "@/i18n/config"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function AccountSettings() {
-  const { identity, refresh, updatePreferences } = useAuth()
+  const { identity, refresh, status, updatePreferences } = useAuth()
   const { locale, t } = useI18n()
   const passwordSet = identity.password_set !== false
   const [current, setCurrent] = useState("")
   const [next, setNext] = useState("")
   const [confirmation, setConfirmation] = useState("")
   const [busy, setBusy] = useState(false)
+
+  if (status.demo) return <main className="min-h-screen">
+    <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><RunTraceLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />{t("Projects")}</Button></div><AccountMenu /></header>
+    <section className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-8 sm:py-16"><div className="rounded-xl border bg-card p-8 text-center shadow-sm"><h1 className="text-2xl font-semibold tracking-tight">{t("Read-only demo")}</h1><p className="mt-3 text-muted-foreground">{t("Account settings are unavailable in demo mode.")}</p></div></section>
+  </main>
 
   return <main className="min-h-screen">
     <header className="flex h-16 items-center justify-between border-b px-4 sm:px-8"><div className="flex items-center gap-3"><RunTraceLogo /><span className="h-5 w-px bg-border" /><Button variant="ghost" render={<Link href="/" />} nativeButton={false}><ArrowLeft data-icon="inline-start" />{t("Projects")}</Button></div><AccountMenu /></header>
