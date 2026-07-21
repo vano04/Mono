@@ -30,6 +30,7 @@ const messages = {
   "Password changed": "パスワードが変更されました",
   "Passwords do not match": "パスワードが一致しません",
   "Personalize RunTrace on this browser. Project data is not affected.": "このブラウザで RunTrace をカスタマイズします。プロジェクト データには影響しません。",
+  "Your appearance preferences follow your account across devices. Project data is not affected.": "外観設定はすべてのデバイスでアカウントに同期されます。プロジェクトデータには影響しません。",
   "Project navigation": "プロジェクトのナビゲーション",
   "Projects": "プロジェクト",
   "Reset defaults": "デフォルトにリセットする",

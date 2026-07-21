@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { ThemeProvider } from "next-themes"
 
 const STORAGE_KEY = "runtrace:appearance:v1"
@@ -14,6 +14,7 @@ type AppearancePreferences = {
 type AppearanceContextValue = AppearancePreferences & {
   setAccent: (value: string) => void
   setCompactRows: (value: boolean) => void
+  hydrateAppearance: (preferences: AppearancePreferences) => void
   resetAppearance: () => void
 }
 
@@ -52,6 +53,12 @@ function faviconFor(accent: string) {
 
 function AppearanceState({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState<AppearancePreferences>(readPreferences)
+  const setAccent = useCallback((accent: string) => setPreferences((current) => ({ ...current, accent })), [])
+  const setCompactRows = useCallback((compactRows: boolean) => setPreferences((current) => ({ ...current, compactRows })), [])
+  const hydrateAppearance = useCallback((next: AppearancePreferences) => setPreferences((current) => (
+    current.accent === next.accent && current.compactRows === next.compactRows ? current : next
+  )), [])
+  const resetAppearance = useCallback(() => setPreferences({ accent: DEFAULT_ACCENT, compactRows: false }), [])
 
   useEffect(() => {
     const root = document.documentElement
@@ -76,10 +83,11 @@ function AppearanceState({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppearanceContextValue>(() => ({
     ...preferences,
-    setAccent: (accent) => setPreferences((current) => ({ ...current, accent })),
-    setCompactRows: (compactRows) => setPreferences((current) => ({ ...current, compactRows })),
-    resetAppearance: () => setPreferences({ accent: DEFAULT_ACCENT, compactRows: false }),
-  }), [preferences])
+    setAccent,
+    setCompactRows,
+    hydrateAppearance,
+    resetAppearance,
+  }), [hydrateAppearance, preferences, resetAppearance, setAccent, setCompactRows])
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>
 }

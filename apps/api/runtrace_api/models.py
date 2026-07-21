@@ -58,6 +58,9 @@ class Identity(Base):
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     locale: Mapped[str] = mapped_column(String(16), default="en", server_default="en")
+    theme: Mapped[str] = mapped_column(String(16), default="system", server_default="system")
+    accent_color: Mapped[str] = mapped_column(String(7), default="#4f46e5", server_default="#4f46e5")
+    compact_rows: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 

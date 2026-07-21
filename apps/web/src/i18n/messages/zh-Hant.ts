@@ -30,6 +30,7 @@ const messages = {
   "Password changed": "密碼已更改",
   "Passwords do not match": "密碼不匹配",
   "Personalize RunTrace on this browser. Project data is not affected.": "在此瀏覽器上個人化 RunTrace。項目數據不受影響。",
+  "Your appearance preferences follow your account across devices. Project data is not affected.": "您的外觀偏好會隨帳戶同步到所有裝置。項目資料不受影響。",
   "Project navigation": "項目導航",
   "Projects": "專案",
   "Reset defaults": "重置預設值",

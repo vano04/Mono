@@ -3,6 +3,14 @@ import type { Locale } from "@/i18n/config"
 
 export type IdentityRole = "owner" | "admin" | "member"
 export type IdentityStatus = "active" | "pending" | "suspended"
+export type AppearanceTheme = "light" | "dark" | "system"
+
+export interface IdentityPreferencesUpdate {
+  locale?: Locale
+  theme?: AppearanceTheme
+  accent_color?: string
+  compact_rows?: boolean
+}
 
 export interface AuthIdentity {
   id: string
@@ -12,6 +20,9 @@ export interface AuthIdentity {
   password_set?: boolean
   onboarding_completed: boolean
   locale: Locale
+  theme: AppearanceTheme
+  accent_color: string
+  compact_rows: boolean
   last_active_at?: string | null
   created_at?: string
 }
@@ -62,7 +73,7 @@ export const auth = {
   }),
   logout: () => api<void>("/api/v1/auth/logout", { method: "POST" }),
   completeOnboarding: () => api<{ onboarding_completed: boolean }>("/api/v1/auth/onboarding/complete", { method: "POST" }),
-  updatePreferences: (body: { locale: Locale }) => api<AuthIdentity>("/api/v1/auth/preferences", { method: "PATCH", body: JSON.stringify(body) }),
+  updatePreferences: (body: IdentityPreferencesUpdate) => api<AuthIdentity>("/api/v1/auth/preferences", { method: "PATCH", body: JSON.stringify(body) }),
   identities: () => api<AuthIdentity[]>("/api/v1/auth/identities", { cache: "no-store" }),
   createIdentity: (body: { username: string; role: "admin" | "member" }) => api<{ identity: AuthIdentity; setup_token: string; setup_path: string }>("/api/v1/auth/identities", { method: "POST", body: JSON.stringify(body) }),
   updateIdentity: (id: string, body: { role?: "admin" | "member"; status?: "active" | "suspended" }) => api<AuthIdentity>(`/api/v1/auth/identities/${id}`, { method: "PATCH", body: JSON.stringify(body) }),

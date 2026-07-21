@@ -3,19 +3,22 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { Check, KeyRound, LoaderCircle, LockKeyhole, ShieldCheck, Users } from "lucide-react"
 import { toast } from "sonner"
+import { useTheme } from "next-themes"
 
+import { useAppearance } from "@/components/appearance-provider"
 import { RunTraceLogo } from "@/components/runtrace-logo"
 import { OnboardingTour } from "@/components/onboarding-tour"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { auth, type AuthIdentity, type AuthStatus } from "@/lib/auth"
+import { auth, type AuthIdentity, type AuthStatus, type IdentityPreferencesUpdate } from "@/lib/auth"
 import { useI18n } from "@/components/i18n-provider"
 
 interface AuthContextValue {
   status: AuthStatus
   identity: AuthIdentity
   refresh: () => Promise<void>
+  updatePreferences: (preferences: IdentityPreferencesUpdate) => Promise<AuthIdentity>
   signOut: () => Promise<void>
 }
 
@@ -104,16 +107,43 @@ function SetupScreen({ status, onComplete }: { status: AuthStatus; onComplete: (
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setLocale, t } = useI18n()
+  const { setTheme } = useTheme()
+  const { hydrateAppearance } = useAppearance()
   const [status, setStatus] = useState<AuthStatus | null>(null)
   const refresh = useCallback(async () => setStatus(await auth.status()), [])
+  const updatePreferences = useCallback(async (preferences: IdentityPreferencesUpdate) => {
+    const identity = await auth.updatePreferences(preferences)
+    setStatus((current) => current?.identity ? {
+      ...current,
+      identity: {
+        ...current.identity,
+        ...(preferences.locale !== undefined ? { locale: identity.locale } : {}),
+        ...(preferences.theme !== undefined ? { theme: identity.theme } : {}),
+        ...(preferences.accent_color !== undefined ? { accent_color: identity.accent_color } : {}),
+        ...(preferences.compact_rows !== undefined ? { compact_rows: identity.compact_rows } : {}),
+      },
+    } : current)
+    return identity
+  }, [])
 
   useEffect(() => { auth.status().then(setStatus).catch((error) => toast.error(error instanceof Error ? error.message : t("Something went wrong"))) }, [t])
-  useEffect(() => { setLocale(status?.identity?.locale ?? "en") }, [setLocale, status?.identity?.locale])
+  useEffect(() => {
+    const identity = status?.identity
+    if (!identity) {
+      setLocale("en")
+      return
+    }
+    setLocale(identity.locale)
+    if (!status.dev) {
+      setTheme(identity.theme)
+      hydrateAppearance({ accent: identity.accent_color, compactRows: identity.compact_rows })
+    }
+  }, [hydrateAppearance, setLocale, setTheme, status?.dev, status?.identity])
 
   const value = useMemo<AuthContextValue | null>(() => {
     if (!status?.identity) return null
-    return { status, identity: status.identity, refresh, signOut: async () => { await auth.logout(); await refresh() } }
-  }, [refresh, status])
+    return { status, identity: status.identity, refresh, updatePreferences, signOut: async () => { await auth.logout(); await refresh() } }
+  }, [refresh, status, updatePreferences])
 
   if (!status) return <main className="grid min-h-screen place-items-center"><LoaderCircle className="size-6 animate-spin text-muted-foreground" aria-label={t("Loading RunTrace")} /></main>
   if (!status.authenticated || !value) return <SetupScreen status={status} onComplete={refresh} />

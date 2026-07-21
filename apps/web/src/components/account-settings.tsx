@@ -18,8 +18,8 @@ import { localeNames, supportedLocales, type Locale } from "@/i18n/config"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function AccountSettings() {
-  const { identity, refresh } = useAuth()
-  const { locale, setLocale, t } = useI18n()
+  const { identity, refresh, updatePreferences } = useAuth()
+  const { locale, t } = useI18n()
   const passwordSet = identity.password_set !== false
   const [current, setCurrent] = useState("")
   const [next, setNext] = useState("")
@@ -36,7 +36,7 @@ export function AccountSettings() {
         <div className="flex items-start gap-3"><Languages className="mt-0.5 size-5 text-muted-foreground" /><div><h2 className="text-xl font-semibold">{t("Language")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("Your language preference follows your account across devices.")}</p></div></div>
         <div className="mt-5 space-y-2"><Label htmlFor="account-language">{t("Language")}</Label><Select value={locale} onValueChange={(value) => {
           if (!value || value === locale) return
-          auth.updatePreferences({ locale: value as Locale }).then(async () => { setLocale(value as Locale); await refresh(); toast.success(t("Language updated")) }).catch((error) => toast.error(error instanceof Error ? error.message : t("Could not update language")))
+          updatePreferences({ locale: value as Locale }).then(() => toast.success(t("Language updated"))).catch((error) => toast.error(error instanceof Error ? error.message : t("Could not update language")))
         }}><SelectTrigger id="account-language" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{supportedLocales.map((value) => <SelectItem key={value} value={value}>{localeNames[value]}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">{t("Select the language used for your RunTrace account.")}</p></div>
       </div>
       <div className="mt-8 rounded-xl border bg-card p-6 shadow-sm">

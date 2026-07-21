@@ -61,7 +61,10 @@ class PasswordChangeRequest(BaseModel):
 
 
 class IdentityPreferencesUpdateRequest(BaseModel):
-    locale: Literal["en", "zh-Hans", "zh-Hant", "es", "pt-BR", "fr", "de", "ja", "ko", "ru", "hi"]
+    locale: Literal["en", "zh-Hans", "zh-Hant", "es", "pt-BR", "fr", "de", "ja", "ko", "ru", "hi"] | None = None
+    theme: Literal["light", "dark", "system"] | None = None
+    accent_color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+    compact_rows: bool | None = None
 
 
 class IdentityCreateRequest(BaseModel):
@@ -173,6 +176,9 @@ def _identity_payload(identity: Identity) -> dict[str, Any]:
         "password_set": bool(identity.password_hash),
         "onboarding_completed": identity.onboarding_completed_at is not None,
         "locale": identity.locale,
+        "theme": identity.theme,
+        "accent_color": identity.accent_color,
+        "compact_rows": identity.compact_rows,
     }
 
 
@@ -361,6 +367,9 @@ def auth_status(request: Request, session: Session = Depends(get_db)) -> dict[st
             "password_set": True if principal.dev else bool(identity and identity.password_hash),
             "onboarding_completed": True if principal.dev else bool(identity and identity.onboarding_completed_at),
             "locale": "en" if principal.dev else (identity.locale if identity else "en"),
+            "theme": "system" if principal.dev else (identity.theme if identity else "system"),
+            "accent_color": "#4f46e5" if principal.dev else (identity.accent_color if identity else "#4f46e5"),
+            "compact_rows": False if principal.dev else bool(identity and identity.compact_rows),
         },
     }
 
@@ -374,11 +383,29 @@ def update_identity_preferences(
 ) -> dict[str, Any]:
     principal = request.state.identity
     if principal.dev:
-        return {"locale": "en"}
+        return {
+            "id": principal.id,
+            "username": principal.username,
+            "role": principal.role,
+            "status": principal.status,
+            "password_set": True,
+            "onboarding_completed": True,
+            "locale": body.locale or "en",
+            "theme": body.theme or "system",
+            "accent_color": body.accent_color or "#4f46e5",
+            "compact_rows": body.compact_rows if body.compact_rows is not None else False,
+        }
     identity = session.get(Identity, principal.id)
     if not identity:
         raise HTTPException(404, "Identity not found")
-    identity.locale = body.locale
+    if body.locale is not None:
+        identity.locale = body.locale
+    if body.theme is not None:
+        identity.theme = body.theme
+    if body.accent_color is not None:
+        identity.accent_color = body.accent_color.lower()
+    if body.compact_rows is not None:
+        identity.compact_rows = body.compact_rows
     session.commit()
     session.refresh(identity)
     return _identity_payload(identity)

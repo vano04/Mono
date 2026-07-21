@@ -49,13 +49,33 @@ def test_owner_bootstrap_and_password_login(fresh_database, monkeypatch):
     assert completed.status_code == 200
     assert completed.json() == {"onboarding_completed": True}
     assert fresh_database.get("/api/v1/auth/status").json()["identity"]["onboarding_completed"] is True
-    assert fresh_database.get("/api/v1/auth/status").json()["identity"]["locale"] == "en"
+    default_preferences = fresh_database.get("/api/v1/auth/status").json()["identity"]
+    assert default_preferences["locale"] == "en"
+    assert default_preferences["theme"] == "system"
+    assert default_preferences["accent_color"] == "#4f46e5"
+    assert default_preferences["compact_rows"] is False
 
     preferences = fresh_database.patch("/api/v1/auth/preferences", json={"locale": "ru"})
     assert preferences.status_code == 200
     assert preferences.json()["locale"] == "ru"
     assert fresh_database.get("/api/v1/auth/status").json()["identity"]["locale"] == "ru"
     assert fresh_database.patch("/api/v1/auth/preferences", json={"locale": "xx"}).status_code == 422
+    appearance = fresh_database.patch("/api/v1/auth/preferences", json={
+        "theme": "dark",
+        "accent_color": "#AABBCC",
+        "compact_rows": True,
+    })
+    assert appearance.status_code == 200
+    assert appearance.json()["locale"] == "ru"
+    assert appearance.json()["theme"] == "dark"
+    assert appearance.json()["accent_color"] == "#aabbcc"
+    assert appearance.json()["compact_rows"] is True
+    persisted = fresh_database.get("/api/v1/auth/status").json()["identity"]
+    assert persisted["theme"] == "dark"
+    assert persisted["accent_color"] == "#aabbcc"
+    assert persisted["compact_rows"] is True
+    assert fresh_database.patch("/api/v1/auth/preferences", json={"theme": "sepia"}).status_code == 422
+    assert fresh_database.patch("/api/v1/auth/preferences", json={"accent_color": "indigo"}).status_code == 422
     assert fresh_database.get("/api/v1/projects").status_code == 200
 
     with SessionLocal() as session:
@@ -70,7 +90,12 @@ def test_owner_bootstrap_and_password_login(fresh_database, monkeypatch):
         "password": "correct horse battery staple",
     })
     assert signed_in.status_code == 200
-    assert fresh_database.get("/api/v1/auth/status").json()["identity"]["onboarding_completed"] is True
+    signed_in_identity = fresh_database.get("/api/v1/auth/status").json()["identity"]
+    assert signed_in_identity["onboarding_completed"] is True
+    assert signed_in_identity["locale"] == "ru"
+    assert signed_in_identity["theme"] == "dark"
+    assert signed_in_identity["accent_color"] == "#aabbcc"
+    assert signed_in_identity["compact_rows"] is True
     assert fresh_database.get("/api/v1/projects").status_code == 200
 
     changed = fresh_database.post("/api/v1/auth/password", json={
